@@ -143,9 +143,36 @@ export const GridImageCreator: FC = () => {
 
 	const svgToPngBlob = useCallback(
 		async (size = 400): Promise<Blob> => {
-			const svg = generateSVG()
-			const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
-			const url = URL.createObjectURL(svgBlob)
+			const cellSize = GRID_RESOLUTION / gridSize
+			const rects: string[] = []
+
+			for (let y = 0; y < gridSize; y++) {
+				let startX: number | null = null
+				let width = 0
+
+				for (let x = 0; x <= gridSize; x++) {
+					const index = y * gridSize + x
+					const cell = x < gridSize ? grid[index] : false
+
+					if (cell && startX === null) {
+						startX = x
+						width = 1
+					} else if (cell) {
+						width++
+					}
+
+					if ((!cell || x === gridSize) && startX !== null) {
+						rects.push(
+							`<rect x="${startX * cellSize}" y="${y * cellSize}" width="${width * cellSize}" height="${cellSize}" fill="${darkMode ? 'white' : 'black'}" />`
+						)
+						startX = null
+						width = 0
+					}
+				}
+			}
+
+			const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${GRID_RESOLUTION} ${GRID_RESOLUTION}">${rects.join('')}</svg>`
+			const dataUrl = `data:image/svg+xml;base64,${btoa(svg)}`
 
 			const img = new Image()
 			img.width = size
@@ -153,8 +180,8 @@ export const GridImageCreator: FC = () => {
 
 			await new Promise<void>((resolve, reject) => {
 				img.onload = () => resolve()
-				img.onerror = reject
-				img.src = url
+				img.onerror = () => reject(new Error('Failed to load SVG image'))
+				img.src = dataUrl
 			})
 
 			const canvas = document.createElement('canvas')
@@ -164,7 +191,6 @@ export const GridImageCreator: FC = () => {
 			if (!ctx) throw new Error('Failed to get canvas context')
 
 			ctx.drawImage(img, 0, 0, size, size)
-			URL.revokeObjectURL(url)
 
 			return new Promise((resolve, reject) => {
 				canvas.toBlob(
@@ -177,7 +203,7 @@ export const GridImageCreator: FC = () => {
 				)
 			})
 		},
-		[generateSVG]
+		[gridSize, grid, darkMode]
 	)
 
 	const copyAsPNG = async () => {
