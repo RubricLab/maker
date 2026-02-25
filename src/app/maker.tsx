@@ -141,56 +141,31 @@ export const GridImageCreator: FC = () => {
 		toast.success('JSON copied to clipboard')
 	}
 
-	const svgToPngBlob = useCallback(
+	const gridToPngBlob = useCallback(
 		async (size = 400): Promise<Blob> => {
-			const cellSize = GRID_RESOLUTION / gridSize
-			const rects: string[] = []
-
-			for (let y = 0; y < gridSize; y++) {
-				let startX: number | null = null
-				let width = 0
-
-				for (let x = 0; x <= gridSize; x++) {
-					const index = y * gridSize + x
-					const cell = x < gridSize ? grid[index] : false
-
-					if (cell && startX === null) {
-						startX = x
-						width = 1
-					} else if (cell) {
-						width++
-					}
-
-					if ((!cell || x === gridSize) && startX !== null) {
-						rects.push(
-							`<rect x="${startX * cellSize}" y="${y * cellSize}" width="${width * cellSize}" height="${cellSize}" fill="${darkMode ? 'white' : 'black'}" />`
-						)
-						startX = null
-						width = 0
-					}
-				}
-			}
-
-			const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${GRID_RESOLUTION} ${GRID_RESOLUTION}">${rects.join('')}</svg>`
-			const dataUrl = `data:image/svg+xml;base64,${btoa(svg)}`
-
-			const img = new Image()
-			img.width = size
-			img.height = size
-
-			await new Promise<void>((resolve, reject) => {
-				img.onload = () => resolve()
-				img.onerror = () => reject(new Error('Failed to load SVG image'))
-				img.src = dataUrl
-			})
-
 			const canvas = document.createElement('canvas')
 			canvas.width = size
 			canvas.height = size
 			const ctx = canvas.getContext('2d')
 			if (!ctx) throw new Error('Failed to get canvas context')
 
-			ctx.drawImage(img, 0, 0, size, size)
+			const cellSize = size / gridSize
+			const fillColor = darkMode ? '#ffffff' : '#000000'
+
+			for (let y = 0; y < gridSize; y++) {
+				for (let x = 0; x < gridSize; x++) {
+					const index = y * gridSize + x
+					if (grid[index]) {
+						ctx.fillStyle = fillColor
+						ctx.fillRect(
+							Math.floor(x * cellSize),
+							Math.floor(y * cellSize),
+							Math.ceil(cellSize),
+							Math.ceil(cellSize)
+						)
+					}
+				}
+			}
 
 			return new Promise((resolve, reject) => {
 				canvas.toBlob(
@@ -208,7 +183,7 @@ export const GridImageCreator: FC = () => {
 
 	const copyAsPNG = async () => {
 		try {
-			const blob = await svgToPngBlob()
+			const blob = await gridToPngBlob()
 			await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
 			toast.success('PNG copied to clipboard')
 		} catch (error) {
@@ -219,7 +194,7 @@ export const GridImageCreator: FC = () => {
 
 	const downloadAsPNG = async () => {
 		try {
-			const blob = await svgToPngBlob()
+			const blob = await gridToPngBlob()
 			const url = URL.createObjectURL(blob)
 			const link = document.createElement('a')
 			link.href = url
