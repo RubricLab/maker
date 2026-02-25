@@ -141,6 +141,74 @@ export const GridImageCreator: FC = () => {
 		toast.success('JSON copied to clipboard')
 	}
 
+	const svgToPngBlob = useCallback(
+		async (size = 400): Promise<Blob> => {
+			const svg = generateSVG()
+			const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
+			const url = URL.createObjectURL(svgBlob)
+
+			const img = new Image()
+			img.width = size
+			img.height = size
+
+			await new Promise<void>((resolve, reject) => {
+				img.onload = () => resolve()
+				img.onerror = reject
+				img.src = url
+			})
+
+			const canvas = document.createElement('canvas')
+			canvas.width = size
+			canvas.height = size
+			const ctx = canvas.getContext('2d')
+			if (!ctx) throw new Error('Failed to get canvas context')
+
+			ctx.drawImage(img, 0, 0, size, size)
+			URL.revokeObjectURL(url)
+
+			return new Promise((resolve, reject) => {
+				canvas.toBlob(
+					blob => {
+						if (blob) resolve(blob)
+						else reject(new Error('Failed to create PNG blob'))
+					},
+					'image/png',
+					1.0
+				)
+			})
+		},
+		[generateSVG]
+	)
+
+	const copyAsPNG = async () => {
+		try {
+			const blob = await svgToPngBlob()
+			await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+			toast.success('PNG copied to clipboard')
+		} catch (error) {
+			console.error({ error })
+			toast.error('Failed to copy PNG to clipboard')
+		}
+	}
+
+	const downloadAsPNG = async () => {
+		try {
+			const blob = await svgToPngBlob()
+			const url = URL.createObjectURL(blob)
+			const link = document.createElement('a')
+			link.href = url
+			link.download = `grid-${gridSize}x${gridSize}.png`
+			document.body.appendChild(link)
+			link.click()
+			document.body.removeChild(link)
+			URL.revokeObjectURL(url)
+			toast.success('PNG downloaded')
+		} catch (error) {
+			console.error({ error })
+			toast.error('Failed to download PNG')
+		}
+	}
+
 	const clearGrid = () => {
 		setGrid(Array(gridSize * gridSize).fill(0))
 		toast.success('Grid cleared')
@@ -188,9 +256,11 @@ export const GridImageCreator: FC = () => {
 					/>
 				))}
 			</div>
-			<Container arrangement="row" gap="sm">
-				<Button label="Copy as SVG" variant="primary" onClick={copyAsSVG} />
-				<Button label="Copy as JSON" variant="secondary" onClick={copyAsJSON} />
+			<Container arrangement="row" gap="sm" className="flex-wrap">
+				<Button label="Copy SVG" variant="primary" onClick={copyAsSVG} />
+				<Button label="Copy PNG" variant="primary" onClick={copyAsPNG} />
+				<Button label="Download PNG" variant="secondary" onClick={downloadAsPNG} />
+				<Button label="Copy JSON" variant="secondary" onClick={copyAsJSON} />
 				<div className="grow" />
 				<Button label="Clear" variant="destructive" onClick={clearGrid} />
 			</Container>
