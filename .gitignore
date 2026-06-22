@@ -28,4 +28,4 @@ dist-ssr
 out
 next-env.d.ts
 .vercel
-.env*
+.env*tsconfig.tsbuildinfo

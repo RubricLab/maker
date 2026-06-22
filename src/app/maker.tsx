@@ -181,7 +181,7 @@ export const GridImageCreator: FC = () => {
 		[gridSize, grid, darkMode]
 	)
 
-	const copyAsPNG = async () => {
+	const copyAsPNG = useCallback(async () => {
 		try {
 			const blob = await gridToPngBlob()
 			await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
@@ -190,7 +190,20 @@ export const GridImageCreator: FC = () => {
 			console.error({ error })
 			toast.error('Failed to copy PNG to clipboard')
 		}
-	}
+	}, [gridToPngBlob])
+
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			const isCopyShortcut = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c'
+			if (!isCopyShortcut) return
+			const target = e.target as HTMLElement | null
+			if (target && /^(input|textarea|select)$/i.test(target.tagName)) return
+			e.preventDefault()
+			void copyAsPNG()
+		}
+		window.addEventListener('keydown', handleKeyDown)
+		return () => window.removeEventListener('keydown', handleKeyDown)
+	}, [copyAsPNG])
 
 	const downloadAsPNG = async () => {
 		try {
@@ -259,7 +272,7 @@ export const GridImageCreator: FC = () => {
 			</div>
 			<Container arrangement="row" gap="sm" className="flex-wrap">
 				<Button label="Copy SVG" variant="primary" onClick={copyAsSVG} />
-				<Button label="Copy PNG" variant="primary" onClick={copyAsPNG} />
+				<Button label="Copy PNG  ⌘C" variant="primary" onClick={copyAsPNG} />
 				<Button label="Download PNG" variant="secondary" onClick={downloadAsPNG} />
 				<Button label="Copy JSON" variant="secondary" onClick={copyAsJSON} />
 				<div className="grow" />
