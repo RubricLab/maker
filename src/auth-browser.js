@@ -70,13 +70,7 @@ button.addEventListener('click', async () => {
 			type: credential.type
 		}
 		await post(path + '/verify', wire)
-		if (register) {
-			message.textContent = 'Passkey registered. You can use it next time you sign in.'
-			message.style.color = 'inherit'
-			button.textContent = 'Register another passkey'
-		} else {
-			location.assign('/')
-		}
+		location.assign('/')
 	} catch (error) {
 		message.textContent =
 			error.name === 'NotAllowedError'

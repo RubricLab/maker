@@ -11,7 +11,7 @@ afterEach(() => {
 	for (const cleanup of cleanups.splice(0)) cleanup()
 })
 
-function fixture(sendFails = false) {
+function fixture(sendFails = false, upstreamOrigin = 'http://127.0.0.1:1') {
 	const directory = mkdtempSync(join(tmpdir(), 'maker-auth-'))
 	const databasePath = join(directory, 'auth.sqlite')
 	const emails: { email: string; url: string }[] = []
@@ -22,7 +22,7 @@ function fixture(sendFails = false) {
 			if (sendFails) throw new Error('offline')
 			emails.push({ email, url })
 		},
-		upstreamOrigin: 'http://127.0.0.1:1'
+		upstreamOrigin
 	})
 	const store = new AuthStore(databasePath, origin)
 	cleanups.push(() => {
@@ -62,7 +62,7 @@ test('email signup normalizes users, waits for POST, and rejects link reuse', as
 	expect(scan.headers.get('set-cookie')).toBeNull()
 	const login = await request('/login/verify', { token })
 	expect(login.status).toBe(303)
-	expect(login.headers.get('location')).toBe('/auth/passkeys')
+	expect(login.headers.get('location')).toBe('/')
 	expect(login.headers.get('set-cookie')).toContain('HttpOnly; Secure; SameSite=Strict')
 	const account = await request('/auth/passkeys', undefined, sessionCookie(login))
 	const html = await account.text()
@@ -171,4 +171,31 @@ test('credentials and sessions belong to each verified user', async () => {
 	expect(aliceOptions.options.user.id).not.toBe(bobOptions.options.user.id)
 	expect(aliceOptions.options.excludeCredentials).toHaveLength(1)
 	expect(bobOptions.options.excludeCredentials).toHaveLength(0)
+})
+
+test('proxy replaces forged publisher headers with the signed-in email', async () => {
+	const upstream = Bun.serve({
+		hostname: '127.0.0.1',
+		port: 0,
+		fetch: request => Response.json({ email: request.headers.get('x-maker-user-email') })
+	})
+	try {
+		const { store, handler } = fixture(false, `http://127.0.0.1:${upstream.port}`)
+		for (const email of ['alice@example.com', 'bob@example.com']) {
+			const user = store.consumeLink(store.createLink(email))!
+			const session = store.createSession(user.id)
+			const response = await handler(
+				new Request(origin + '/api/board', {
+					headers: {
+						Cookie: `__Host-maker_session=${session}`,
+						'x-maker-user-email': 'forged@example.com'
+					}
+				})
+			)
+			const result = await response.json()
+			expect(result.email).toBe(email)
+		}
+	} finally {
+		upstream.stop(true)
+	}
 })

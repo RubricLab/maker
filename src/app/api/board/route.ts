@@ -39,6 +39,9 @@ export function GET() {
 }
 
 export async function POST(request: Request) {
+	// The loopback-only app trusts this header only from the auth proxy, which overwrites it.
+	const email = request.headers.get('x-maker-user-email')
+	if (!email) return NextResponse.json({ error: 'Sign in to publish an icon.' }, { status: 401 })
 	if (isRateLimited(request)) {
 		return NextResponse.json({ error: 'Try again in a minute.' }, { status: 429 })
 	}
@@ -55,7 +58,7 @@ export async function POST(request: Request) {
 		return NextResponse.json({ error: 'Draw something before adding it.' }, { status: 400 })
 	}
 
-	const result = addCreation(grid)
+	const result = addCreation(grid, email)
 	return NextResponse.json(result, {
 		headers: { 'Cache-Control': 'no-store' },
 		status: result.created ? 201 : 200

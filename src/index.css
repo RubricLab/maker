@@ -99,6 +99,13 @@ button {
 	min-width: 0;
 }
 
+.canvas-creator {
+	margin: 0 0 12px 20px;
+	font-size: 16px;
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
 .canvas {
 	display: grid;
 	grid-template-areas:
@@ -512,11 +519,11 @@ button {
 }
 
 .board-icon {
-	display: grid;
-	aspect-ratio: 1;
-	place-items: center;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	min-width: 0;
 	border: 1px solid var(--border);
-	padding: 15%;
 	background: var(--background);
 	color: var(--foreground);
 	text-decoration: none;
@@ -526,13 +533,42 @@ button {
 		transform 80ms ease;
 }
 
-.board-icon:hover {
+.board-icon:hover,
+.board-icon:focus-visible,
+.board-icon[data-selected="true"] {
 	border-color: var(--foreground);
 	background: var(--hover);
 }
 
 .board-icon:active {
 	transform: scale(0.96);
+}
+
+.board-preview {
+	display: block;
+	width: 100%;
+	aspect-ratio: 1;
+	padding: 15%;
+}
+
+.board-creator {
+	width: calc(100% - 8px);
+	margin: auto 4px 6px;
+	padding: 3px 7px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--background);
+	color: var(--secondary);
+	font-size: 12px;
+	line-height: 1.35;
+	text-align: center;
+}
+
+.board-creator-email {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .board-icon svg {

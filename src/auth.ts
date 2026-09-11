@@ -52,13 +52,13 @@ export const createAuthHandler = ({
 		return new Response(null, {
 			headers: {
 				...privateHeaders,
-				Location: '/auth/passkeys',
+				Location: '/',
 				'Set-Cookie': cookie(COOKIE_NAME, session, SESSION_MAX_AGE)
 			},
 			status: 303
 		})
 	}
-	const proxy = async (request: Request): Promise<Response> => {
+	const proxy = async (request: Request, email: string): Promise<Response> => {
 		const incomingUrl = new URL(request.url)
 		const upstreamUrl = new URL(upstreamOrigin)
 		upstreamUrl.pathname = incomingUrl.pathname
@@ -66,6 +66,8 @@ export const createAuthHandler = ({
 		const headers = new Headers(request.headers)
 		headers.delete('host')
 		headers.delete('cookie')
+		// Only the verified session can supply attribution, never the browser.
+		headers.set('x-maker-user-email', email)
 		headers.set('accept-encoding', 'identity')
 		headers.set('x-forwarded-host', new URL(store.origin).host)
 		headers.set('x-forwarded-proto', new URL(store.origin).protocol.slice(0, -1))
@@ -228,7 +230,7 @@ export const createAuthHandler = ({
 		if (path.startsWith('/auth/') || path.startsWith('/login/'))
 			return jsonResponse({ error: 'Not found.' }, 404)
 		if (!user) return Response.redirect(new URL('/login', store.origin), 303)
-		return proxy(request)
+		return proxy(request, user.email)
 	}
 }
 

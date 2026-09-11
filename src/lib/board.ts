@@ -3,12 +3,14 @@ import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 export type BoardCreation = {
+	createdBy: string | null
 	createdAt: string
 	grid: string
 	id: number
 }
 
 type BoardRow = {
+	creator_email: string | null
 	created_at: string
 	grid: string
 	id: number
@@ -28,25 +30,48 @@ database.exec(`
 	) STRICT;
 `)
 
+// Existing icons have no recorded author. Never assign them to the next publisher.
+database
+	.transaction(() => {
+		const columns = database.query<{ name: string }, []>('PRAGMA table_info(creations)').all()
+		if (!columns.some(column => column.name === 'creator_email')) {
+			database.exec('ALTER TABLE creations ADD COLUMN creator_email TEXT')
+		}
+	})
+	.immediate()
+
 const serialize = (row: BoardRow): BoardCreation => ({
 	createdAt: row.created_at,
+	createdBy: row.creator_email,
 	grid: row.grid,
 	id: row.id
 })
 
 export const listCreations = (limit = 90): BoardCreation[] => {
 	const rows = database
-		.query('SELECT id, grid, created_at FROM creations ORDER BY id DESC LIMIT ?')
+		.query('SELECT id, grid, created_at, creator_email FROM creations ORDER BY id DESC LIMIT ?')
 		.all(limit) as BoardRow[]
 	return rows.map(serialize)
 }
 
-export const addCreation = (grid: string): { created: boolean; creation: BoardCreation } => {
-	const result = database.query('INSERT OR IGNORE INTO creations (grid) VALUES (?)').run(grid)
+export const findCreation = (grid: string): BoardCreation | null => {
 	const row = database
-		.query('SELECT id, grid, created_at FROM creations WHERE grid = ?')
-		.get(grid) as BoardRow | null
+		.query<BoardRow, [string]>(
+			'SELECT id, grid, created_at, creator_email FROM creations WHERE grid = ?'
+		)
+		.get(grid)
+	return row ? serialize(row) : null
+}
 
-	if (!row) throw new Error('Failed to save creation')
-	return { created: result.changes > 0, creation: serialize(row) }
+export const addCreation = (
+	grid: string,
+	email: string
+): { created: boolean; creation: BoardCreation } => {
+	if (!email) throw new Error('Publisher email is required')
+	const result = database
+		.query('INSERT OR IGNORE INTO creations (grid, creator_email) VALUES (?, ?)')
+		.run(grid, email)
+	const creation = findCreation(grid)
+	if (!creation) throw new Error('Failed to save creation')
+	return { created: result.changes > 0, creation }
 }

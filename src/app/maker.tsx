@@ -5,18 +5,14 @@ import { createParser, useQueryState } from 'nuqs'
 import { type FC, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useDarkMode } from '~/hooks/useDarkMode'
+import type { BoardCreation } from '~/lib/board'
 import { GRID_SIZES, RUBRIC_BINARY } from '~/lib/constants'
 
 const GRID_RESOLUTION = 99
 const PNG_TARGET_SIZE = 400
 
-type BoardCreation = {
-	createdAt: string
-	grid: string
-	id: number
-}
-
 type GridImageCreatorProps = {
+	initialCreation: BoardCreation | null
 	initialGrid?: string
 }
 
@@ -41,7 +37,10 @@ const createGridPath = (grid: string): string => {
 	return path
 }
 
-export const GridImageCreator: FC<GridImageCreatorProps> = ({ initialGrid = RUBRIC_BINARY }) => {
+export const GridImageCreator: FC<GridImageCreatorProps> = ({
+	initialCreation,
+	initialGrid = RUBRIC_BINARY
+}) => {
 	const [grid, setGrid] = useQueryState(
 		'grid',
 		parseAsBooleanString.withDefault(initialGrid.split('').map(char => Number(char)))
@@ -56,6 +55,9 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({ initialGrid = RUBR
 	const darkMode = useDarkMode()
 	const gridSize = useMemo(() => Math.sqrt(grid.length), [grid])
 	const serializedGrid = useMemo(() => grid.join(''), [grid])
+	const selectedCreation =
+		board.find(creation => creation.grid === serializedGrid) ??
+		(initialCreation?.grid === serializedGrid ? initialCreation : null)
 	const smallerGridSize = [...GRID_SIZES].reverse().find(size => size < gridSize)
 	const largerGridSize = GRID_SIZES.find(size => size > gridSize)
 	const isBlank = !grid.some(Boolean)
@@ -359,6 +361,9 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({ initialGrid = RUBR
 				</button>
 
 				<div className="editor">
+					{selectedCreation?.createdBy ? (
+						<p className="canvas-creator">Created by {selectedCreation.createdBy}</p>
+					) : null}
 					<div className="canvas">
 						<div className="axis x-axis" aria-hidden="true">
 							{Array.from({ length: gridSize + 1 }, (_, index) => (
@@ -526,12 +531,26 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({ initialGrid = RUBR
 								key={isPopping ? `${creation.id}-${poppingCreation.nonce}` : creation.id}
 								className="board-icon"
 								data-popping={isPopping}
+								data-selected={creation.grid === serializedGrid}
 								href={`/?grid=${creation.grid}`}
-								title={`${size}×${size}`}
+								onFocus={() => setGrid(creation.grid.split('').map(Number))}
+								onClick={event => {
+									if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+									event.preventDefault()
+									setGrid(creation.grid.split('').map(Number))
+								}}
+								title={creation.createdBy ? `Created by ${creation.createdBy}` : `${size}×${size}`}
 							>
-								<svg viewBox={`0 0 ${size} ${size}`} aria-hidden="true" shapeRendering="crispEdges">
-									<path d={createGridPath(creation.grid)} />
-								</svg>
+								<span className="board-preview">
+									<svg viewBox={`0 0 ${size} ${size}`} aria-hidden="true" shapeRendering="crispEdges">
+										<path d={createGridPath(creation.grid)} />
+									</svg>
+								</span>
+								{creation.createdBy ? (
+									<span className="board-creator">
+										Created by <span className="board-creator-email">{creation.createdBy}</span>
+									</span>
+								) : null}
 								<span className="sr-only">
 									Open {size} by {size} creation
 								</span>
