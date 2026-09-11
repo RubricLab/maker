@@ -15,7 +15,7 @@ type AuthOptions = {
 }
 
 const cookie = (name: string, value: string, maxAge: number) =>
-	`${name}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Strict`
+	`${name}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=${name === COOKIE_NAME ? 'Lax' : 'Strict'}`
 const readCookie = (request: Request, name: string) =>
 	(request.headers.get('cookie') ?? '')
 		.split(';')
@@ -109,6 +109,18 @@ export const createAuthHandler = ({
 		) {
 			return jsonResponse({ error: 'Invalid origin.' }, 403)
 		}
+		// Same-origin probe restores older Strict cookies after an external navigation.
+		if (path === '/auth/session' && request.method === 'GET') {
+			return jsonResponse(
+				{ signedIn: !!user },
+				200,
+				user
+					? {
+							'Set-Cookie': cookie(COOKIE_NAME, session, SESSION_MAX_AGE)
+						}
+					: {}
+			)
+		}
 		if (path === '/login' && request.method === 'GET') {
 			if (user) return Response.redirect(new URL('/', store.origin), 303)
 			return htmlResponse(loginPage())
@@ -122,7 +134,7 @@ export const createAuthHandler = ({
 			return new Response(null, {
 				headers: {
 					...privateHeaders,
-					Location: '/login',
+					Location: '/login?signed_out=1',
 					'Set-Cookie': cookie(COOKIE_NAME, '', 0)
 				},
 				status: 303

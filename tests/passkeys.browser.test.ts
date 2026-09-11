@@ -64,7 +64,7 @@ test('email → register passkey → sign out → passkey sign-in, with real Web
 		expect(store.db.query('SELECT * FROM passkeys').all()).toHaveLength(1)
 		await page.goto(origin + '/auth/passkeys')
 		await page.getByRole('button', { exact: true, name: 'Sign out' }).click()
-		await page.waitForURL(origin + '/login')
+		await page.waitForURL(origin + '/login?signed_out=1')
 		// Recreate the handler to verify persistence, rather than relying on memory.
 		handler = createAuthHandler(options)
 		let verification: { body: string; cookie: string } | undefined
@@ -85,10 +85,35 @@ test('email → register passkey → sign out → passkey sign-in, with real Web
 			})
 		)
 		expect(replay.status).toBe(400)
+		// Expired session: a remembered browser starts WebAuthn without the app button.
+		store.db.exec('UPDATE sessions SET expires = 0')
+		await page.goto(origin + '/')
+		await page.getByRole('heading', { name: 'Private Maker' }).waitFor()
+		const remembered = await page.evaluate(() => localStorage.getItem('maker.passkey'))
+		expect(remembered).toBe('1')
+		// Cross-site navigation with a legacy Strict cookie resumes via the same-origin probe.
+		const cookies = await context.cookies()
+		const active = cookies.find(cookie => cookie.name === '__Host-maker_session')!
+		await context.addCookies([{ ...active, sameSite: 'Strict' }])
+		let probeCount = 0
+		page.on('request', request => {
+			if (request.url() === origin + '/auth/session') probeCount++
+		})
+		await page.route('https://return.example/**', route =>
+			route.fulfill({ body: `<a href="${origin}/">Return to Maker</a>`, contentType: 'text/html' })
+		)
+		await page.goto('https://return.example/')
+		await page.getByRole('link', { name: 'Return to Maker' }).click()
+		await page.getByRole('heading', { name: 'Private Maker' }).waitFor()
+		expect(probeCount).toBeGreaterThan(0)
+		const refreshedCookies = await context.cookies()
+		expect(refreshedCookies.find(cookie => cookie.name === '__Host-maker_session')?.sameSite).toBe(
+			'Lax'
+		)
 		await page.goto(origin + '/auth/passkeys')
 		await page.getByText('Signed in as alice@example.com').waitFor()
 		await page.getByRole('button', { exact: true, name: 'Sign out' }).click()
-		await page.waitForURL(origin + '/login')
+		await page.waitForURL(origin + '/login?signed_out=1')
 		// Corrupt the signed assertion, which must never create a session.
 		await page.unroute('**/auth/passkey/login/verify')
 		await page.route('**/auth/passkey/login/verify', async route => {
@@ -98,6 +123,27 @@ test('email → register passkey → sign out → passkey sign-in, with real Web
 		})
 		await page.getByRole('button', { name: 'Sign in with a passkey' }).click()
 		await page.getByText('Passkey could not be verified. Try again or sign in by email.').waitFor()
+		expect(page.url()).toBe(origin + '/login?signed_out=1')
+		// Cancelling an automatic prompt leaves email/manual sign-in available, with no auth bypass.
+		await page.addInitScript(() => {
+			Object.defineProperty(navigator.credentials, 'get', {
+				value: () => Promise.reject(new DOMException('Cancelled', 'NotAllowedError'))
+			})
+		})
+		const automaticOptions = page.waitForResponse(
+			response => response.url() === origin + '/auth/passkey/login/options'
+		)
+		await page.goto(origin + '/login')
+		await automaticOptions
+		await page.waitForFunction(
+			() => !document.querySelector<HTMLButtonElement>('[data-passkey]')?.disabled
+		)
+		const alert = await page.getByRole('alert').textContent()
+		expect(alert).toBe('')
+		const sessionResponse = await context.request.get(origin + '/auth/session')
+		const sessionState = await sessionResponse.json()
+		expect(sessionState.signedIn).toBe(false)
+		await page.getByLabel('Email', { exact: true }).fill('alice@example.com')
 		expect(page.url()).toBe(origin + '/login')
 		expect(errors).toEqual([])
 	} finally {

@@ -20,8 +20,24 @@ const databasePath = process.env.DATABASE_PATH ?? join(process.cwd(), 'data', 'm
 mkdirSync(dirname(databasePath), { recursive: true })
 
 const database = new Database(databasePath, { create: true })
-database.exec('PRAGMA journal_mode = WAL')
 database.exec('PRAGMA busy_timeout = 5000')
+// Concurrent Next.js workers can race to enable WAL on a fresh database.
+// SQLite does not always invoke busy_timeout for this journal-mode transition.
+for (let attempt = 0; ; attempt++) {
+	try {
+		database.exec('PRAGMA journal_mode = WAL')
+		break
+	} catch (error) {
+		if (
+			!(error instanceof Error) ||
+			!('code' in error) ||
+			error.code !== 'SQLITE_BUSY' ||
+			attempt >= 19
+		)
+			throw error
+		Bun.sleepSync(50)
+	}
+}
 database.exec(`
 	CREATE TABLE IF NOT EXISTS creations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,

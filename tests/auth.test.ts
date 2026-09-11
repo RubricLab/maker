@@ -63,7 +63,7 @@ test('email signup normalizes users, waits for POST, and rejects link reuse', as
 	const login = await request('/login/verify', { token })
 	expect(login.status).toBe(303)
 	expect(login.headers.get('location')).toBe('/')
-	expect(login.headers.get('set-cookie')).toContain('HttpOnly; Secure; SameSite=Strict')
+	expect(login.headers.get('set-cookie')).toContain('HttpOnly; Secure; SameSite=Lax')
 	const account = await request('/auth/passkeys', undefined, sessionCookie(login))
 	const html = await account.text()
 	expect(html).toContain('new@example.com')

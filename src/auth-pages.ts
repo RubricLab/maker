@@ -40,11 +40,11 @@ export const loginPage = (message = '', sent = false) =>
 	<p>Sign in or create an account. No password needed.</p>
 	<form action="/login" method="post">
 		<label for="email">Email</label>
-		<input id="email" type="email" name="email" placeholder="you@example.com" autocomplete="email" maxlength="254" required>
+		<input id="email" type="email" name="email" placeholder="you@example.com" autocomplete="username webauthn" maxlength="254" required>
 		<button type="submit">Send sign-in link</button>
 	</form>
 	${sent ? '<p role="status">Check your inbox for a sign-in link. It expires in 15 minutes.</p>' : ''}
-	<button class="secondary" type="button" data-passkey="login">Sign in with a passkey</button>
+	<button class="secondary" type="button" data-passkey="login" data-autostart="${!sent && !message}">Sign in with a passkey</button>
 	<p role="alert">${escapeHtml(message)}</p>
 `,
 		true

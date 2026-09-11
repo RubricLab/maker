@@ -348,22 +348,24 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 	return (
 		<main className="maker">
 			<div className="creator">
-				<button
-					className="action-button secondary-action desktop-board-action"
-					type="button"
-					onClick={addToBoard}
-					disabled={isBlank || addingToBoard || addedGrid === serializedGrid}
-				>
-					<span>
-						{addingToBoard ? 'Adding…' : addedGrid === serializedGrid ? 'On board' : 'Add to board'}
-					</span>
-					<ArrowRightIcon aria-hidden="true" />
-				</button>
-
-				<div className="editor">
+				<div className="canvas-heading">
 					{selectedCreation?.createdBy ? (
 						<p className="canvas-creator">Created by {selectedCreation.createdBy}</p>
 					) : null}
+					<button
+						className="action-button secondary-action desktop-board-action"
+						type="button"
+						onClick={addToBoard}
+						disabled={isBlank || addingToBoard || addedGrid === serializedGrid}
+					>
+						<span>
+							{addingToBoard ? 'Adding…' : addedGrid === serializedGrid ? 'On board' : 'Add to board'}
+						</span>
+						<ArrowRightIcon aria-hidden="true" />
+					</button>
+				</div>
+
+				<div className="editor">
 					<div className="canvas">
 						<div className="axis x-axis" aria-hidden="true">
 							{Array.from({ length: gridSize + 1 }, (_, index) => (
