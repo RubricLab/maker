@@ -493,7 +493,7 @@ button {
 	font-weight: 600;
 }
 
-.board-heading span {
+.board-heading a {
 	color: var(--secondary);
 	font-size: 13px;
 }

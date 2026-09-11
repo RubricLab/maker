@@ -1,122 +1,76 @@
-import { createHash, timingSafeEqual } from 'node:crypto'
+import { mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { accountPage, loginPage, verifyPage } from './auth-pages'
+import { AuthStore, SESSION_MAX_AGE } from './passkeys'
 
-const COOKIE_NAME = 'maker_session'
-const SESSION_MAX_AGE = 60 * 60 * 24 * 7
-const FAILURE_LIMIT = 5
-const FAILURE_WINDOW_MS = 15 * 60 * 1000
-const MAX_FAILURE_ENTRIES = 10_000
-
-type Failure = {
-	count: number
-	startedAt: number
-}
+const COOKIE_NAME = '__Host-maker_session'
+const CEREMONY_COOKIE = '__Host-maker_ceremony'
+const WINDOW_MS = 15 * 60 * 1000
 
 type AuthOptions = {
-	password: string
 	upstreamOrigin: string
+	publicOrigin?: string
+	databasePath: string
+	sendLink: (email: string, url: string) => Promise<void>
 }
 
-const digest = (value: string): Buffer => createHash('sha256').update(value).digest()
-
-const loginPage = (message = '', blocked = false): string => `<!doctype html>
-<html lang="en">
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<meta name="robots" content="noindex, nofollow">
-	<title>Maker</title>
-	<style>
-		* { box-sizing: border-box; }
-		body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #fff; color: #111; font-family: system-ui, sans-serif; }
-		form { width: min(100%, 320px); display: grid; gap: 12px; }
-		h1 { margin: 0 0 12px; font-size: 18px; font-weight: 600; }
-		input, button { width: 100%; height: 44px; border: 1px solid #d4d4d4; border-radius: 8px; font: inherit; }
-		input { padding: 0 12px; background: transparent; color: inherit; }
-		button { border-color: #111; background: #111; color: #fff; cursor: pointer; }
-		button:disabled { opacity: .5; cursor: not-allowed; }
-		p { min-height: 20px; margin: 0; color: #b42318; font-size: 14px; }
-		@media (prefers-color-scheme: dark) {
-			body { background: #0a0a0a; color: #f5f5f5; }
-			input { border-color: #404040; }
-			button { border-color: #f5f5f5; background: #f5f5f5; color: #111; }
-		}
-	</style>
-</head>
-<body>
-	<form action="/login" method="post">
-		<h1>Maker</h1>
-		<input type="password" name="password" aria-label="Password" placeholder="Password" autocomplete="current-password" autofocus required ${blocked ? 'disabled' : ''}>
-		<button type="submit" ${blocked ? 'disabled' : ''}>Continue</button>
-		<p role="alert">${message}</p>
-	</form>
-</body>
-</html>`
-
+const cookie = (name: string, value: string, maxAge: number) =>
+	`${name}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Strict`
+const readCookie = (request: Request, name: string) =>
+	(request.headers.get('cookie') ?? '')
+		.split(';')
+		.map(part => part.trim().split('='))
+		.find(([key]) => key === name)?.[1] ?? ''
+const privateHeaders = {
+	'Cache-Control': 'no-store',
+	'Referrer-Policy': 'strict-origin',
+	'X-Content-Type-Options': 'nosniff'
+}
 const htmlResponse = (body: string, status = 200, headers?: HeadersInit): Response =>
 	new Response(body, {
 		headers: {
-			'Cache-Control': 'no-store',
+			...privateHeaders,
 			'Content-Security-Policy':
-				"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+				"default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
 			'Content-Type': 'text/html; charset=utf-8',
-			'X-Content-Type-Options': 'nosniff',
 			...headers
 		},
 		status
 	})
+const jsonResponse = (body: object, status = 200, headers?: HeadersInit) =>
+	Response.json(body, { headers: { ...privateHeaders, ...headers }, status })
 
-export const createAuthHandler = ({ password, upstreamOrigin }: AuthOptions) => {
-	const expectedPassword = digest(password)
-	const sessionToken = digest(`session\0${password}`).toString('hex')
-	const failures = new Map<string, Failure>()
-
-	const clearExpiredFailures = (now: number): void => {
-		for (const [ip, failure] of failures) {
-			if (now - failure.startedAt >= FAILURE_WINDOW_MS) failures.delete(ip)
-		}
+export const createAuthHandler = ({
+	upstreamOrigin,
+	publicOrigin = 'https://maker.rubric.sh',
+	databasePath,
+	sendLink
+}: AuthOptions) => {
+	const store = new AuthStore(databasePath, publicOrigin)
+	const signIn = (userId: string) => {
+		const session = store.createSession(userId)
+		return new Response(null, {
+			headers: {
+				...privateHeaders,
+				Location: '/auth/passkeys',
+				'Set-Cookie': cookie(COOKIE_NAME, session, SESSION_MAX_AGE)
+			},
+			status: 303
+		})
 	}
-
-	const recordFailure = (ip: string, now: number): void => {
-		clearExpiredFailures(now)
-		const current = failures.get(ip)
-		if (current) {
-			current.count++
-			return
-		}
-		if (failures.size >= MAX_FAILURE_ENTRIES) {
-			const oldestIp = failures.keys().next().value
-			if (oldestIp) failures.delete(oldestIp)
-		}
-		failures.set(ip, { count: 1, startedAt: now })
-	}
-
-	const hasSession = (request: Request): boolean => {
-		const cookie = request.headers.get('cookie') ?? ''
-		const value = cookie
-			.split(';')
-			.map(part => part.trim().split('='))
-			.find(([name]) => name === COOKIE_NAME)?.[1]
-		return value === sessionToken
-	}
-
-	const externalUrl = (request: Request, path: string): URL => {
-		const incomingUrl = new URL(request.url)
-		const host = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim() || incomingUrl.host
-		const protocol =
-			request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() ||
-			incomingUrl.protocol.slice(0, -1)
-		return new URL(path, `${protocol}://${host}`)
-	}
-
 	const proxy = async (request: Request): Promise<Response> => {
 		const incomingUrl = new URL(request.url)
-		const upstreamUrl = new URL(`${incomingUrl.pathname}${incomingUrl.search}`, upstreamOrigin)
+		const upstreamUrl = new URL(upstreamOrigin)
+		upstreamUrl.pathname = incomingUrl.pathname
+		upstreamUrl.search = incomingUrl.search
 		const headers = new Headers(request.headers)
 		headers.delete('host')
+		headers.delete('cookie')
 		headers.set('accept-encoding', 'identity')
-		headers.set('x-forwarded-host', externalUrl(request, '/').host)
-		headers.set('x-forwarded-proto', externalUrl(request, '/').protocol.slice(0, -1))
-
+		headers.set('x-forwarded-host', new URL(store.origin).host)
+		headers.set('x-forwarded-proto', new URL(store.origin).protocol.slice(0, -1))
+		// Caddy overwrites X-Real-IP. Do not pass user-supplied forwarding chains upstream.
+		headers.set('x-forwarded-for', request.headers.get('x-real-ip') ?? 'unknown')
 		const upstreamResponse = await fetch(upstreamUrl, {
 			body: request.method === 'GET' || request.method === 'HEAD' ? null : request.body,
 			headers,
@@ -124,7 +78,7 @@ export const createAuthHandler = ({ password, upstreamOrigin }: AuthOptions) => 
 			redirect: 'manual'
 		})
 		const responseHeaders = new Headers(upstreamResponse.headers)
-		responseHeaders.set('X-Content-Type-Options', 'nosniff')
+		for (const [key, value] of Object.entries(privateHeaders)) responseHeaders.set(key, value)
 		return new Response(upstreamResponse.body, {
 			headers: responseHeaders,
 			status: upstreamResponse.status,
@@ -134,60 +88,183 @@ export const createAuthHandler = ({ password, upstreamOrigin }: AuthOptions) => 
 
 	return async (request: Request): Promise<Response> => {
 		const url = new URL(request.url)
-		if (url.pathname === '/health') {
-			return new Response('ok', { headers: { 'Cache-Control': 'no-store' } })
+		const path = url.pathname
+		const session = readCookie(request, COOKIE_NAME)
+		const user = store.readSession(session)
+		const ip = request.headers.get('x-real-ip') ?? 'unknown'
+		if (path === '/health') return new Response('ok', { headers: privateHeaders })
+		if (path === '/auth/browser.js' && request.method === 'GET') {
+			return new Response(Bun.file(new URL('./auth-browser.js', import.meta.url)), {
+				headers: {
+					...privateHeaders,
+					'Content-Type': 'text/javascript; charset=utf-8'
+				}
+			})
 		}
-
-		if (url.pathname === '/login' && request.method === 'GET') {
-			if (hasSession(request)) return Response.redirect(externalUrl(request, '/'), 303)
+		if (
+			!['GET', 'HEAD', 'OPTIONS'].includes(request.method) &&
+			request.headers.get('origin') !== store.origin
+		) {
+			return jsonResponse({ error: 'Invalid origin.' }, 403)
+		}
+		if (path === '/login' && request.method === 'GET') {
+			if (user) return Response.redirect(new URL('/', store.origin), 303)
 			return htmlResponse(loginPage())
 		}
-
-		if (url.pathname === '/login' && request.method === 'POST') {
-			const ip = request.headers.get('x-real-ip') ?? 'unknown'
-			const now = Date.now()
-			const form = await request.formData()
-			const candidate = form.get('password')
-			const matches =
-				typeof candidate === 'string' && timingSafeEqual(digest(candidate), expectedPassword)
-
-			if (matches) {
-				failures.delete(ip)
-				return new Response(null, {
-					headers: {
-						'Cache-Control': 'no-store',
-						Location: '/',
-						'Set-Cookie': `${COOKIE_NAME}=${sessionToken}; Path=/; Max-Age=${SESSION_MAX_AGE}; HttpOnly; Secure; SameSite=Strict`
-					},
-					status: 303
-				})
-			}
-
-			const failure = failures.get(ip)
-			if (failure && now - failure.startedAt < FAILURE_WINDOW_MS && failure.count >= FAILURE_LIMIT) {
-				const retryAfter = Math.ceil((FAILURE_WINDOW_MS - (now - failure.startedAt)) / 1000)
-				return htmlResponse(loginPage('Try again later.', true), 429, {
-					'Retry-After': String(retryAfter)
-				})
-			}
-
-			recordFailure(ip, now)
-			return htmlResponse(loginPage('Wrong password.'), 401)
+		if (path === '/auth/passkeys' && request.method === 'GET') {
+			if (!user) return Response.redirect(new URL('/login', store.origin), 303)
+			return htmlResponse(accountPage(user.email))
 		}
-
-		if (!hasSession(request)) return Response.redirect(externalUrl(request, '/login'), 303)
+		if (path === '/auth/logout' && request.method === 'POST') {
+			store.deleteSession(session)
+			return new Response(null, {
+				headers: {
+					...privateHeaders,
+					Location: '/login',
+					'Set-Cookie': cookie(COOKIE_NAME, '', 0)
+				},
+				status: 303
+			})
+		}
+		if (path === '/login' && request.method === 'POST') {
+			const retry =
+				store.limit('email:global', 100, 60 * 60 * 1000) || store.limit(`email:ip:${ip}`, 5, WINDOW_MS)
+			if (retry)
+				return htmlResponse(loginPage('Too many requests. Try again later.'), 429, {
+					'Retry-After': String(retry)
+				})
+			let email: string
+			try {
+				const form = await request.formData()
+				const value = form.get('email')
+				if (typeof value !== 'string') throw new Error('Invalid email')
+				email = value.trim().toLowerCase()
+				if (email.length > 254 || !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email))
+					throw new Error('Invalid email')
+			} catch {
+				return htmlResponse(loginPage('Enter a valid email address.'), 400)
+			}
+			const emailRetry = store.limit(`email:address:${email}`, 3, WINDOW_MS)
+			// Give the same response for throttled recipients to avoid email enumeration.
+			if (emailRetry) return htmlResponse(loginPage('', true))
+			const token = store.createLink(email)
+			try {
+				await sendLink(email, `${store.origin}/login/verify?token=${token}`)
+			} catch {
+				store.deleteLink(token)
+				console.error('Maker sign-in email failed to send')
+				return htmlResponse(loginPage('Could not send the email. Please try again shortly.'), 502)
+			}
+			return htmlResponse(loginPage('', true))
+		}
+		if (path === '/login/verify' && request.method === 'GET') {
+			const token = url.searchParams.get('token') ?? ''
+			if (!/^[A-Za-z0-9_-]{43}$/.test(token))
+				return htmlResponse(loginPage('That link is invalid. Request a new one.'), 400)
+			return htmlResponse(verifyPage(token))
+		}
+		if (path === '/login/verify' && request.method === 'POST') {
+			const retry =
+				store.limit('verify:global', 1000, WINDOW_MS) || store.limit(`verify:${ip}`, 30, WINDOW_MS)
+			if (retry)
+				return htmlResponse(loginPage('Too many attempts. Try again later.'), 429, {
+					'Retry-After': String(retry)
+				})
+			try {
+				const form = await request.formData()
+				const token = form.get('token')
+				if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token))
+					throw new Error('Invalid token')
+				const verifiedUser = store.consumeLink(token)
+				if (!verifiedUser) throw new Error('Expired token')
+				store.deleteSession(session)
+				return signIn(verifiedUser.id)
+			} catch {
+				return htmlResponse(loginPage('That link expired or was already used. Request a new one.'), 400)
+			}
+		}
+		if (path.startsWith('/auth/passkey/')) {
+			if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed.' }, 405)
+			const match = /^\/auth\/passkey\/(register|login)\/(options|verify)$/.exec(path)
+			if (!match) return jsonResponse({ error: 'Not found.' }, 404)
+			const register = match[1] === 'register'
+			if (register && !user)
+				return jsonResponse({ error: 'Sign in before registering a passkey.' }, 401)
+			const retry =
+				store.limit('passkey:global', 1000, WINDOW_MS) || store.limit(`passkey:${ip}`, 60, WINDOW_MS)
+			if (retry)
+				return jsonResponse({ error: 'Try again later.' }, 429, { 'Retry-After': String(retry) })
+			try {
+				if (match[2] === 'options') {
+					const opened = register
+						? await store.registrationOptions(session)
+						: await store.authenticationOptions()
+					return jsonResponse(opened.options, 200, {
+						'Set-Cookie': cookie(CEREMONY_COOKIE, opened.ceremony, 300)
+					})
+				}
+				const response = await request.json()
+				const ceremony = readCookie(request, CEREMONY_COOKIE)
+				if (register) {
+					await store.register(ceremony, session, response)
+					return jsonResponse({ ok: true }, 200, { 'Set-Cookie': cookie(CEREMONY_COOKIE, '', 0) })
+				}
+				const userId = await store.authenticate(ceremony, response)
+				store.deleteSession(session)
+				const newSession = store.createSession(userId)
+				const result = jsonResponse({ ok: true }, 200, {
+					'Set-Cookie': cookie(COOKIE_NAME, newSession, SESSION_MAX_AGE)
+				})
+				result.headers.append('Set-Cookie', cookie(CEREMONY_COOKIE, '', 0))
+				return result
+			} catch {
+				return jsonResponse(
+					{ error: 'Passkey could not be verified. Try again or sign in by email.' },
+					400,
+					{ 'Set-Cookie': cookie(CEREMONY_COOKIE, '', 0) }
+				)
+			}
+		}
+		if (path.startsWith('/auth/') || path.startsWith('/login/'))
+			return jsonResponse({ error: 'Not found.' }, 404)
+		if (!user) return Response.redirect(new URL('/login', store.origin), 303)
 		return proxy(request)
 	}
 }
 
+export const resendMailer =
+	(apiKey: string, sender: string) => async (email: string, url: string) => {
+		const response = await fetch('https://api.resend.com/emails', {
+			body: JSON.stringify({
+				from: `Maker <${sender}>`,
+				subject: 'Sign in to Maker',
+				text: `Sign in to Maker:\n\n${url}\n\nThis link expires in 15 minutes and can only be used once. If you did not request it, ignore this email.`,
+				to: [email]
+			}),
+			headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+			method: 'POST',
+			signal: AbortSignal.timeout(10_000)
+		})
+		if (!response.ok) throw new Error(`Resend returned ${response.status}`)
+	}
+
 if (import.meta.main) {
-	const password = process.env.APP_PASSWORD
-	if (!password) throw new Error('APP_PASSWORD is required')
+	const apiKey = process.env.RESEND_API_KEY
+	const sender = process.env.RESEND_SENDER_EMAIL
+	if (!apiKey || !sender) throw new Error('RESEND_API_KEY and RESEND_SENDER_EMAIL are required')
 	const port = Number(process.env.AUTH_PORT ?? 8841)
 	const upstreamOrigin = process.env.UPSTREAM_ORIGIN ?? 'http://127.0.0.1:8840'
+	const databasePath = process.env.AUTH_DATABASE_PATH ?? 'data/auth.sqlite'
+	mkdirSync(dirname(databasePath), { mode: 0o700, recursive: true })
 	Bun.serve({
-		fetch: createAuthHandler({ password, upstreamOrigin }),
+		fetch: createAuthHandler({
+			databasePath,
+			publicOrigin: process.env.PUBLIC_ORIGIN ?? 'https://maker.rubric.sh',
+			sendLink: resendMailer(apiKey, sender),
+			upstreamOrigin
+		}),
 		hostname: '127.0.0.1',
+		maxRequestBodySize: 64 * 1024,
 		port
 	})
 	console.log(`Maker auth listening on 127.0.0.1:${port}`)

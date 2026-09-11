@@ -511,7 +511,7 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({ initialGrid = RUBR
 			<section className="board" aria-labelledby="board-title">
 				<div className="board-heading">
 					<h2 id="board-title">Board</h2>
-					<span>Made here</span>
+					<a href="/auth/passkeys">Account</a>
 				</div>
 				{boardLoading ? <p className="board-status">Loading…</p> : null}
 				{!boardLoading && board.length === 0 ? (

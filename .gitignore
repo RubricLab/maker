@@ -29,4 +29,5 @@ data/
 out
 next-env.d.ts
 .vercel
-.env*tsconfig.tsbuildinfo
+.env*
+tsconfig.tsbuildinfo
