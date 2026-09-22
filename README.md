@@ -23,7 +23,7 @@ Locally the database defaults to `data/maker.sqlite`. Keep database files and en
 
 ## Production
 
-The `maker` project in Railway's Rubric Labs workspace deploys `RubricLab/maker` main as one service from the Dockerfile, with a persistent volume at `/data` and one replica. Next.js listens on Railway's `PORT`. Until Railway accepts the custom domain, `maker.rubric.sh` points to the old dev box only for Caddy to proxy HTTPS to `maker-production-7cc6.up.railway.app`; the old app services there are stopped, and the old databases and `/root/maker-migration` snapshots remain for rollback. Do not remove the Caddy route or change DNS until Railway's custom domain is working. The auth database and the Resend variables are no longer used. To score icons published before moderation, run `railway ssh -- bun run moderate` once. Preserve the board database (use SQLite `.backup` while running).
+The `maker` project in Railway's Rubric Labs workspace deploys `RubricLab/maker` main as one service from the Dockerfile, with a persistent volume at `/data` and one replica. Next.js listens on Railway's `PORT`. `maker.rubric.sh` points directly to Railway. The old devbox services, app, and Caddy route have been removed; historical database snapshots remain in `/root/maker-migration` and `/var/lib/maker`. The auth database and Resend variables are no longer used. To score icons published before moderation, run `railway ssh -- bun run moderate` once. Preserve the board database (use SQLite `.backup` while running).
 
 For local development, `bun run dev`, or `bun --bun run build` then `PORT=8840 bun --bun run start`.
 

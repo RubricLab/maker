@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { useDarkMode } from '~/hooks/useDarkMode'
 import type { BoardCreation } from '~/lib/board'
 import { GRID_SIZES, RUBRIC_BINARY } from '~/lib/constants'
+import { type Game, GameOverlay, LifeIcon, SnakeIcon } from './games'
 
 const GRID_RESOLUTION = 99
 const PNG_TARGET_SIZE = 400
@@ -51,6 +52,7 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 	const [addingToBoard, setAddingToBoard] = useState(false)
 	const [addedGrid, setAddedGrid] = useState<string | null>(null)
 	const [poppingCreation, setPoppingCreation] = useState({ id: 0, nonce: 0 })
+	const [game, setGame] = useState<Game | null>(null)
 
 	const darkMode = useDarkMode()
 	const gridSize = useMemo(() => Math.sqrt(grid.length), [grid])
@@ -346,17 +348,35 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 
 			<div className="creator">
 				<div className="canvas-heading">
-					<button
-						className="action-button secondary-action desktop-board-action"
-						type="button"
-						onClick={addToBoard}
-						disabled={isBlank || addingToBoard || addedGrid === serializedGrid}
-					>
-						<span>
-							{addingToBoard ? 'Adding…' : addedGrid === serializedGrid ? 'On board' : 'Add to board'}
-						</span>
-						<ArrowRightIcon aria-hidden="true" />
-					</button>
+					<div className="game-actions">
+						<button
+							className="action-button secondary-action"
+							type="button"
+							onClick={() => setGame('snake')}
+							disabled={gridSize !== 30}
+							title={gridSize !== 30 ? 'Requires a 30×30 grid' : undefined}
+						>
+							<SnakeIcon /> Play snake
+						</button>
+						<button
+							className="action-button secondary-action"
+							type="button"
+							onClick={() => setGame('life')}
+						>
+							<LifeIcon /> Play Game of Life
+						</button>
+						<button
+							className="action-button secondary-action desktop-board-action"
+							type="button"
+							onClick={addToBoard}
+							disabled={isBlank || addingToBoard || addedGrid === serializedGrid}
+						>
+							<span>
+								{addingToBoard ? 'Adding…' : addedGrid === serializedGrid ? 'On board' : 'Add to board'}
+							</span>
+							<ArrowRightIcon aria-hidden="true" />
+						</button>
+					</div>
 				</div>
 
 				<div className="editor">
@@ -473,6 +493,24 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 						</h2>
 
 						<div className="export-actions">
+							<div className="mobile-game-actions">
+								<button
+									className="action-button secondary-action"
+									type="button"
+									onClick={() => setGame('snake')}
+									disabled={gridSize !== 30}
+									title={gridSize !== 30 ? 'Requires a 30×30 grid' : undefined}
+								>
+									<SnakeIcon /> Play snake
+								</button>
+								<button
+									className="action-button secondary-action"
+									type="button"
+									onClick={() => setGame('life')}
+								>
+									<LifeIcon /> Play Game of Life
+								</button>
+							</div>
 							<button className="action-button primary-action" type="button" onClick={copyAsPNG}>
 								<span className="action-label">
 									<ClipboardCopyIcon aria-hidden="true" />
@@ -562,6 +600,7 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 					})}
 				</div>
 			</section>
+			{game && <GameOverlay key={game} game={game} initial={grid} onClose={() => setGame(null)} />}
 		</main>
 	)
 }
