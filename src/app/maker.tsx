@@ -10,6 +10,7 @@ import { GRID_SIZES, RUBRIC_BINARY } from '~/lib/constants'
 
 const GRID_RESOLUTION = 99
 const PNG_TARGET_SIZE = 400
+const RUBRIC_LOGO = '101110100'
 
 type GridImageCreatorProps = {
 	initialBoard: BoardCreation[]
@@ -328,6 +329,26 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 
 	return (
 		<main className="maker">
+			<nav className="app-nav" aria-label="Maker">
+				<a className="app-logo" href="/" aria-label="Maker home">
+					{Array.from({ length: 25 }, (_, index) => {
+						const row = Math.floor(index / 5)
+						const column = index % 5
+						const isBuffer = row === 0 || column === 0 || row === 4 || column === 4
+						const logoIndex = (row - 1) * 3 + column - 1
+
+						return (
+							<span
+								key={index}
+								className="app-logo-cell"
+								data-active={!isBuffer && RUBRIC_LOGO[logoIndex] === '1'}
+								data-buffer={isBuffer}
+							/>
+						)
+					})}
+				</a>
+			</nav>
+
 			<div className="creator">
 				<div className="canvas-heading">
 					{selectedCreation?.createdBy ? (
@@ -513,7 +534,6 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 			<section className="board" aria-labelledby="board-title">
 				<div className="board-heading">
 					<h2 id="board-title">Board</h2>
-					<a href="/auth/passkeys">Account</a>
 				</div>
 				{board.length === 0 ? (
 					<p className="board-status">Nothing here yet. Add the first one.</p>

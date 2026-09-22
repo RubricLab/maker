@@ -67,6 +67,45 @@ button {
 	clip-path: inset(50%);
 }
 
+.app-nav {
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 10;
+	padding: 18px;
+	pointer-events: none;
+}
+
+.app-logo {
+	display: grid;
+	width: 30px;
+	aspect-ratio: 1;
+	grid-template-columns: repeat(5, 1fr);
+	color: var(--foreground);
+	pointer-events: auto;
+}
+
+.app-logo-cell {
+	position: relative;
+	background: transparent;
+}
+
+.app-logo-cell[data-active="true"] {
+	background: currentColor;
+}
+
+.app-logo-cell[data-buffer="true"]::after {
+	position: absolute;
+	inset: 0;
+	background: repeating-linear-gradient(-45deg, transparent 0 2px, var(--buffer-hash) 2px 4px);
+	content: "";
+}
+
+.app-logo:focus-visible {
+	outline: 2px solid var(--foreground);
+	outline-offset: 4px;
+}
+
 .maker {
 	display: grid;
 	grid-template-columns: minmax(0, 2fr) minmax(270px, 1fr);
@@ -76,7 +115,7 @@ button {
 	max-width: 1320px;
 	min-height: 100svh;
 	margin: 0 auto;
-	padding: max(28px, calc((100svh - 710px) / 2)) 0 48px;
+	padding: max(64px, calc((100svh - 710px) / 2)) 0 48px;
 }
 
 .creator {
@@ -543,11 +582,6 @@ button {
 	font-weight: 600;
 }
 
-.board-heading a {
-	color: var(--secondary);
-	font-size: 13px;
-}
-
 .board-status {
 	margin: 14px 0 0;
 	color: var(--secondary);
@@ -638,6 +672,33 @@ button {
 	}
 }
 
+@media (min-width: 961px) {
+	html,
+	body {
+		height: 100%;
+		overflow: hidden;
+	}
+
+	.maker {
+		height: 100svh;
+		min-height: 0;
+		overflow: hidden;
+	}
+
+	.creator {
+		grid-template-columns: 164px minmax(0, min(620px, calc(100svh - 170px)));
+		align-self: start;
+	}
+
+	.board {
+		height: 100%;
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		scrollbar-width: thin;
+	}
+}
+
 @media (min-width: 961px) and (max-width: 1160px) {
 	.action-button kbd {
 		display: none;
@@ -649,7 +710,7 @@ button {
 		display: block;
 		width: calc(100% - 28px);
 		max-width: 620px;
-		padding: 14px 0 44px;
+		padding: 62px 0 44px;
 	}
 
 	.creator {
