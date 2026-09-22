@@ -20,12 +20,12 @@ Server-only environment:
 RESEND_API_KEY=...
 RESEND_SENDER_EMAIL=maker@rubric.email
 PUBLIC_ORIGIN=https://maker.rubric.sh
-AUTH_DATABASE_PATH=/data/auth.sqlite
-DATABASE_PATH=/data/board.sqlite
+AUTH_DATABASE_PATH=/data/auth-final.sqlite
+DATABASE_PATH=/data/board-final.sqlite
 PORT=8080
 ```
 
-On Railway, deploy the Dockerfile as one service with a persistent volume at `/data` and one replica. The `maker` project belongs to the Rubric Labs workspace. For local development, start Next.js with `PORT=8840 bun --bun run start`, then `bun run auth` with `PUBLIC_ORIGIN=http://localhost:8841`. Access via localhost, which browsers allow for WebAuthn. Preserve both SQLite databases (use SQLite `.backup` while running). Database files and env values must stay private. Passkeys are scoped to `maker.rubric.sh` and cannot be used on other domains.
+Production: the `maker` project in Railway's Rubric Labs workspace deploys `RubricLab/maker` main as one service with a persistent volume at `/data` and one replica. Until Railway accepts the custom domain, `maker.rubric.sh` points to the old dev box only for Caddy to proxy HTTPS to `maker-production-7cc6.up.railway.app`. The old app services are stopped; the old databases and `/root/maker-migration` snapshots remain there for rollback. Do not remove the Caddy route or change DNS until Railway's custom domain is working. For local development, start Next.js with `PORT=8840 bun --bun run start`, then `bun run auth` with `PUBLIC_ORIGIN=http://localhost:8841`. Access via localhost, which browsers allow for WebAuthn. Preserve both SQLite databases (use SQLite `.backup` while running). Database files and env values must stay private. Passkeys are scoped to `maker.rubric.sh` and cannot be used on other domains.
 
 ## Checks
 
