@@ -30,3 +30,4 @@ For local development, `bun run dev`, or `bun --bun run build` then `PORT=8840 b
 ## Checks
 
 `bun test` covers the board database, the migration, the API, the request Jev receives, and the fail-closed paths, all with a stubbed API. `bun x tsc --noEmit` and `bun --bun run build` check the app. After building, `bun tests/verify-board.ts` publishes a shown and a hidden icon through a real browser against Next.js with an isolated database and a stub Jev, and saves screenshots in the system temp directory. Install the browser with `bun --bun x playwright install chromium` if needed.
+
