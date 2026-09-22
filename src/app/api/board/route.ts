@@ -4,7 +4,7 @@ import { addCreation, listCreations } from '~/lib/board'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-const ALLOWED_GRID_SIZES = new Set([3, 5, 7, 9, 12, 15, 18, 21, 30])
+const ALLOWED_GRID_SIZES = new Set([5, 7, 9, 12, 15, 18, 21, 30])
 const recentRequests = new Map<string, number[]>()
 const RATE_LIMIT = 12
 const RATE_WINDOW_MS = 60_000

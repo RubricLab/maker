@@ -41,7 +41,7 @@ test('stores publisher email and preserves the original credit on duplicates', (
 })
 
 test('API rejects anonymous publishing and ignores author fields in the body', async () => {
-	const body = JSON.stringify({ createdBy: 'forged@example.com', grid: '111000000' })
+	const body = JSON.stringify({ createdBy: 'forged@example.com', grid: '1110000000000000000000000' })
 	const anonymous = await POST(new Request('http://localhost/api/board', { body, method: 'POST' }))
 	expect(anonymous.status).toBe(401)
 	const published = await POST(

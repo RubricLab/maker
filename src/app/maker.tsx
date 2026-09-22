@@ -386,28 +386,36 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 							data-transparent={transparentBackground}
 							style={{ gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}
 						>
-							{grid.map((cell, index) => (
-								<button
-									key={index}
-									className="pixel-cell"
-									data-active={cell === 1}
-									type="button"
-									aria-label={`${cell ? 'Erase' : 'Fill'} row ${Math.floor(index / gridSize) + 1}, column ${(index % gridSize) + 1}`}
-									aria-pressed={cell === 1}
-									onClick={event => {
-										if (event.detail !== 0) return
-										lastPaintedCellRef.current = null
-										paintCell(index, cell ? 0 : 1)
-										lastPaintedCellRef.current = null
-									}}
-									onPointerDown={event => {
-										if (event.button !== 0) return
-										event.preventDefault()
-										handlePointerDown(index)
-									}}
-									onPointerEnter={() => handlePointerMove(index)}
-								/>
-							))}
+							{grid.map((cell, index) => {
+								const row = Math.floor(index / gridSize)
+								const column = index % gridSize
+								const isBuffer =
+									row === 0 || column === 0 || row === gridSize - 1 || column === gridSize - 1
+
+								return (
+									<button
+										key={index}
+										className="pixel-cell"
+										data-active={cell === 1}
+										data-buffer={isBuffer}
+										type="button"
+										aria-label={`${cell ? 'Erase' : 'Fill'} row ${Math.floor(index / gridSize) + 1}, column ${(index % gridSize) + 1}`}
+										aria-pressed={cell === 1}
+										onClick={event => {
+											if (event.detail !== 0) return
+											lastPaintedCellRef.current = null
+											paintCell(index, cell ? 0 : 1)
+											lastPaintedCellRef.current = null
+										}}
+										onPointerDown={event => {
+											if (event.button !== 0) return
+											event.preventDefault()
+											handlePointerDown(index)
+										}}
+										onPointerEnter={() => handlePointerMove(index)}
+									/>
+								)
+							})}
 						</div>
 					</div>
 
