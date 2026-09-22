@@ -12,6 +12,7 @@ const GRID_RESOLUTION = 99
 const PNG_TARGET_SIZE = 400
 
 type GridImageCreatorProps = {
+	initialBoard: BoardCreation[]
 	initialCreation: BoardCreation | null
 	initialGrid?: string
 }
@@ -38,6 +39,7 @@ const createGridPath = (grid: string): string => {
 }
 
 export const GridImageCreator: FC<GridImageCreatorProps> = ({
+	initialBoard,
 	initialCreation,
 	initialGrid = RUBRIC_BINARY
 }) => {
@@ -46,8 +48,7 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 		parseAsBooleanString.withDefault(initialGrid.split('').map(char => Number(char)))
 	)
 	const [transparentBackground, setTransparentBackground] = useState(true)
-	const [board, setBoard] = useState<BoardCreation[]>([])
-	const [boardLoading, setBoardLoading] = useState(true)
+	const [board, setBoard] = useState(initialBoard)
 	const [addingToBoard, setAddingToBoard] = useState(false)
 	const [addedGrid, setAddedGrid] = useState<string | null>(null)
 	const [poppingCreation, setPoppingCreation] = useState({ id: 0, nonce: 0 })
@@ -65,26 +66,6 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 	const drawValueRef = useRef(1)
 	const lastPaintedCellRef = useRef<number | null>(null)
 	const faviconRef = useRef<HTMLLinkElement | null>(null)
-
-	useEffect(() => {
-		let cancelled = false
-		const loadBoard = async (): Promise<void> => {
-			try {
-				const response = await fetch('/api/board', { cache: 'no-store' })
-				if (!response.ok) throw new Error('Failed to load board')
-				const payload = (await response.json()) as { creations: BoardCreation[] }
-				if (!cancelled) setBoard(payload.creations)
-			} catch (error) {
-				console.error({ error })
-			} finally {
-				if (!cancelled) setBoardLoading(false)
-			}
-		}
-		void loadBoard()
-		return () => {
-			cancelled = true
-		}
-	}, [])
 
 	const handleSizeChange = (newSize: number | undefined): void => {
 		if (!newSize) return
@@ -528,8 +509,7 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 					<h2 id="board-title">Board</h2>
 					<a href="/auth/passkeys">Account</a>
 				</div>
-				{boardLoading ? <p className="board-status">Loading…</p> : null}
-				{!boardLoading && board.length === 0 ? (
+				{board.length === 0 ? (
 					<p className="board-status">Nothing here yet. Add the first one.</p>
 				) : null}
 				<div className="board-grid">
