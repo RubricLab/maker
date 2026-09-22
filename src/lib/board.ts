@@ -3,14 +3,12 @@ import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 export type BoardCreation = {
-	createdBy: string | null
 	createdAt: string
 	grid: string
 	id: number
 }
 
 type BoardRow = {
-	creator_email: string | null
 	created_at: string
 	grid: string
 	id: number
@@ -42,52 +40,60 @@ database.exec(`
 	CREATE TABLE IF NOT EXISTS creations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		grid TEXT NOT NULL UNIQUE,
-		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+		hidden INTEGER NOT NULL DEFAULT 0
 	) STRICT;
 `)
 
-// Existing icons have no recorded author. Never assign them to the next publisher.
+// Icons published before moderation stay visible until \`bun run moderate\` checks them.
 database
 	.transaction(() => {
 		const columns = database.query<{ name: string }, []>('PRAGMA table_info(creations)').all()
-		if (!columns.some(column => column.name === 'creator_email')) {
-			database.exec('ALTER TABLE creations ADD COLUMN creator_email TEXT')
+		if (!columns.some(column => column.name === 'hidden')) {
+			database.exec('ALTER TABLE creations ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0')
 		}
 	})
 	.immediate()
 
 const serialize = (row: BoardRow): BoardCreation => ({
 	createdAt: row.created_at,
-	createdBy: row.creator_email,
 	grid: row.grid,
 	id: row.id
 })
 
 export const listCreations = (limit = 90): BoardCreation[] => {
 	const rows = database
-		.query('SELECT id, grid, created_at, creator_email FROM creations ORDER BY id DESC LIMIT ?')
+		.query('SELECT id, grid, created_at FROM creations WHERE hidden = 0 ORDER BY id DESC LIMIT ?')
 		.all(limit) as BoardRow[]
 	return rows.map(serialize)
 }
 
 export const findCreation = (grid: string): BoardCreation | null => {
 	const row = database
-		.query<BoardRow, [string]>(
-			'SELECT id, grid, created_at, creator_email FROM creations WHERE grid = ?'
-		)
+		.query<BoardRow, [string]>('SELECT id, grid, created_at FROM creations WHERE grid = ?')
 		.get(grid)
 	return row ? serialize(row) : null
 }
 
 export const addCreation = (
 	grid: string,
-	email: string
+	hidden: boolean
 ): { created: boolean; creation: BoardCreation } => {
-	if (!email) throw new Error('Publisher email is required')
 	const result = database
-		.query('INSERT OR IGNORE INTO creations (grid, creator_email) VALUES (?, ?)')
-		.run(grid, email)
+		.query('INSERT OR IGNORE INTO creations (grid, hidden) VALUES (?, ?)')
+		.run(grid, hidden ? 1 : 0)
 	const creation = findCreation(grid)
 	if (!creation) throw new Error('Failed to save creation')
 	return { created: result.changes > 0, creation }
+}
+
+export const listAllCreations = (): (BoardCreation & { hidden: boolean })[] => {
+	const rows = database
+		.query('SELECT id, grid, created_at, hidden FROM creations ORDER BY id')
+		.all() as (BoardRow & { hidden: number })[]
+	return rows.map(row => ({ ...serialize(row), hidden: row.hidden === 1 }))
+}
+
+export const setHidden = (id: number, hidden: boolean): void => {
+	database.query('UPDATE creations SET hidden = ? WHERE id = ?').run(hidden ? 1 : 0, id)
 }

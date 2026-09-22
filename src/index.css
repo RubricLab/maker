@@ -144,18 +144,8 @@ button {
 	grid-area: board-action;
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
 	min-width: 0;
 	padding-left: 20px;
-}
-
-.canvas-creator {
-	min-width: 0;
-	margin: 0;
-	font-size: 16px;
-	line-height: 1.5;
-	overflow-wrap: anywhere;
 }
 
 .canvas {
@@ -628,24 +618,6 @@ button {
 	padding: 15%;
 }
 
-.board-creator {
-	width: calc(100% - 8px);
-	margin: auto 4px 6px;
-	padding: 0 3px;
-	color: var(--secondary);
-	font-size: 10px;
-	line-height: 1.4;
-	text-align: center;
-	opacity: 0.7;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.board-creator-email {
-	display: inline;
-}
-
 .board-icon svg {
 	display: block;
 	width: 100%;
@@ -715,10 +687,6 @@ button {
 
 	.creator {
 		display: block;
-	}
-
-	.canvas-heading:has(.canvas-creator) {
-		margin-bottom: 12px;
 	}
 
 	.desktop-board-action {

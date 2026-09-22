@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { addCreation, listCreations } from '~/lib/board'
+import { addCreation, findCreation, listCreations } from '~/lib/board'
+import { shouldHide } from '~/lib/moderation'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -39,9 +40,6 @@ export function GET() {
 }
 
 export async function POST(request: Request) {
-	// The loopback-only app trusts this header only from the auth proxy, which overwrites it.
-	const email = request.headers.get('x-maker-user-email')
-	if (!email) return NextResponse.json({ error: 'Sign in to publish an icon.' }, { status: 401 })
 	if (isRateLimited(request)) {
 		return NextResponse.json({ error: 'Try again in a minute.' }, { status: 429 })
 	}
@@ -58,7 +56,11 @@ export async function POST(request: Request) {
 		return NextResponse.json({ error: 'Draw something before adding it.' }, { status: 400 })
 	}
 
-	const result = addCreation(grid, email)
+	// Moderation is only paid for once per distinct grid; the publisher never learns the verdict.
+	const existing = findCreation(grid)
+	const result = existing
+		? { created: false, creation: existing }
+		: addCreation(grid, await shouldHide(grid))
 	return NextResponse.json(result, {
 		headers: { 'Cache-Control': 'no-store' },
 		status: result.created ? 201 : 200

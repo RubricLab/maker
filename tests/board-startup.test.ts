@@ -12,14 +12,14 @@ test('concurrent workers initialize a fresh board database', async () => {
 				Bun.spawn({
 					cmd: [process.execPath, '-e', `import ${JSON.stringify(modulePath)}`],
 					env: { ...process.env, DATABASE_PATH: join(directory, `${round}.sqlite`) },
-					stdout: 'ignore',
-					stderr: 'inherit'
+					stderr: 'inherit',
+					stdout: 'ignore'
 				})
 			)
 			const exits = await Promise.all(workers.map(worker => worker.exited))
 			expect(exits.every(code => code === 0)).toBe(true)
 		}
 	} finally {
-		rmSync(directory, { recursive: true, force: true })
+		rmSync(directory, { force: true, recursive: true })
 	}
 }, 20_000)

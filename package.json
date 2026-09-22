@@ -3,8 +3,8 @@
 	"dependencies": {
 		"@radix-ui/react-icons": "^1.3.2",
 		"@rubriclab/ui": "^5.1.44",
-		"@simplewebauthn/server": "^13.1.1",
 		"@tailwindcss/typography": "0.5.19",
+		"@typesafe-ai/sdk": "^0.6.0",
 		"clsx": "2.1.1",
 		"next": "^16.0.10",
 		"nuqs": "2.8.3",
@@ -29,14 +29,14 @@
 	"owner": "@rubriclab",
 	"private": true,
 	"scripts": {
-		"auth": "bun src/auth.ts",
 		"bleed": "bunx npm-check-updates -u",
 		"build": "next build",
 		"dev": "next dev",
 		"format": "bunx biome format --write .",
 		"lint": "bunx biome check .",
 		"lint:fix": "bunx biome check . --fix --unsafe",
-		"start": "next start --hostname 127.0.0.1",
+		"moderate": "bun src/moderate.ts",
+		"start": "next start",
 		"test": "bun test tests"
 	},
 	"type": "module",

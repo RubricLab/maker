@@ -2,33 +2,31 @@
 
 NxN pixel drawer with a shared board.
 
-## Auth
+## Moderation
 
-Email verification and passkey registration redirect straight to Maker. Users can register passkeys at `/auth/passkeys`. Email remains available for recovery. No password or email allowlist.
+Anyone can publish. Before an icon is saved, the server asks Jev (TypeSafe's classifier) one yes/no question: does the drawing form the same picture as one of the offensive references? Jev cannot see a shape in a text grid on its own, so the request explains how the editor renders the grid, sends the drawing as rows of `#` and `.`, and includes a gallery of 21 reference drawings of what the board refuses, made the same way at several resolutions, plus a heart, a letter, and a tree for contrast. The answer is averaged over the drawing's four rotations, and anything scoring 0.45 or above is hidden.
 
-Sessions use SameSite=Lax to support return visits from other sites. A same-origin `/auth/session` probe restores older Strict cookies. After a successful passkey registration/sign-in, a local browser hint enables an automatic passkey prompt when the session expires. Browsers without the hint offer conditional passkey autofill in the email field. The hint never grants access; all assertions still require server verification and device approval. Explicit sign-out suppresses automatic prompts on the resulting login page; cancelling a prompt leaves email/manual sign-in available.
+`tests/moderation-eval.ts` scores the held-out drawings in `tests/drawings.ts` against the real API and is where that threshold comes from. At 0.45 it hides every offensive drawing and 5 of the 55 harmless ones (a cactus, a hashtag, a sword, a candle, and a key). The threshold errs toward hiding because a hidden icon costs its author nothing.
 
-Uses `@simplewebauthn/server`, following rubrot's options/verify flow. Passkeys belong to individual users. Sessions last 30 days; email links last 15 minutes; WebAuthn challenges last 5 minutes. Links and challenges are single-use. Email links require a confirmation POST so inbox scanners cannot consume them.
+Flagged icons are saved with `hidden = 1`: the publisher still sees the icon in their session and keeps the share link, but it never appears on the public board. Moderation fails closed: a missing key or a failed request hides the icon and logs the reason. Duplicate grids reuse the first verdict.
 
-The Bun auth proxy protects Next.js, including assets and API routes. On Railway, `src/railway.ts` starts Next.js on loopback and exposes only the auth proxy on `PORT`. The auth proxy overwrites `X-Maker-User-Email` with the verified email; Next.js uses that header for publishing credit. Never expose Next.js directly.
-
-The board stays shared across users. New icons show a muted one-line publisher credit on the thumbnail and a full credit above the canvas when selected, aligned with Add to board on desktop. Duplicate grids keep the first publisher's credit. Older icons remain unattributed. The board database adds a nullable `creator_email` column on startup.
+`bun run moderate` re-checks every icon in the database and updates the flag. Run it once after deploying (icons published earlier default to visible) or after an outage.
 
 Server-only environment:
 
 ```
-RESEND_API_KEY=...
-RESEND_SENDER_EMAIL=maker@rubric.email
-PUBLIC_ORIGIN=https://maker.rubric.sh
-AUTH_DATABASE_PATH=/data/auth-final.sqlite
+TYPESAFE_API_KEY=...
 DATABASE_PATH=/data/board-final.sqlite
-PORT=8080
 ```
 
-Production: the `maker` project in Railway's Rubric Labs workspace deploys `RubricLab/maker` main as one service with a persistent volume at `/data` and one replica. Until Railway accepts the custom domain, `maker.rubric.sh` points to the old dev box only for Caddy to proxy HTTPS to `maker-production-7cc6.up.railway.app`. The old app services are stopped; the old databases and `/root/maker-migration` snapshots remain there for rollback. Do not remove the Caddy route or change DNS until Railway's custom domain is working. For local development, start Next.js with `PORT=8840 bun --bun run start`, then `bun run auth` with `PUBLIC_ORIGIN=http://localhost:8841`. Access via localhost, which browsers allow for WebAuthn. Preserve both SQLite databases (use SQLite `.backup` while running). Database files and env values must stay private. Passkeys are scoped to `maker.rubric.sh` and cannot be used on other domains.
+Locally the database defaults to `data/maker.sqlite`. Keep database files and env values private.
+
+## Production
+
+The `maker` project in Railway's Rubric Labs workspace deploys `RubricLab/maker` main as one service from the Dockerfile, with a persistent volume at `/data` and one replica. Next.js listens on Railway's `PORT`. Until Railway accepts the custom domain, `maker.rubric.sh` points to the old dev box only for Caddy to proxy HTTPS to `maker-production-7cc6.up.railway.app`; the old app services there are stopped, and the old databases and `/root/maker-migration` snapshots remain for rollback. Do not remove the Caddy route or change DNS until Railway's custom domain is working. The auth database and the Resend variables are no longer used. To score icons published before moderation, run `railway ssh -- bun run moderate` once. Preserve the board database (use SQLite `.backup` while running).
+
+For local development, `bun run dev`, or `bun --bun run build` then `PORT=8840 bun --bun run start`.
 
 ## Checks
 
-`bun test` covers email signup, expiration/replay, CSRF, access control, rate limits, user isolation, and a browser round trip using Chromium's virtual WebAuthn authenticator. Install the browser with `bun --bun x playwright install chromium` if needed.
-
-`bun x tsc --noEmit` and `bun --bun run build` check the app. After building, `bun tests/verify-board.ts` checks publishing, attribution, redirects, and mobile layout against Next.js with isolated databases, and saves screenshots in the system temp directory.
+`bun test` covers the board database, the migration, the API, the request Jev receives, and the fail-closed paths, all with a stubbed API. `bun x tsc --noEmit` and `bun --bun run build` check the app. After building, `bun tests/verify-board.ts` publishes a shown and a hidden icon through a real browser against Next.js with an isolated database and a stub Jev, and saves screenshots in the system temp directory. Install the browser with `bun --bun x playwright install chromium` if needed.

@@ -14,7 +14,6 @@ const RUBRIC_LOGO = '101110100'
 
 type GridImageCreatorProps = {
 	initialBoard: BoardCreation[]
-	initialCreation: BoardCreation | null
 	initialGrid?: string
 }
 
@@ -41,7 +40,6 @@ const createGridPath = (grid: string): string => {
 
 export const GridImageCreator: FC<GridImageCreatorProps> = ({
 	initialBoard,
-	initialCreation,
 	initialGrid = RUBRIC_BINARY
 }) => {
 	const [grid, setGrid] = useQueryState(
@@ -57,9 +55,6 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 	const darkMode = useDarkMode()
 	const gridSize = useMemo(() => Math.sqrt(grid.length), [grid])
 	const serializedGrid = useMemo(() => grid.join(''), [grid])
-	const selectedCreation =
-		board.find(creation => creation.grid === serializedGrid) ??
-		(initialCreation?.grid === serializedGrid ? initialCreation : null)
 	const smallerGridSize = [...GRID_SIZES].reverse().find(size => size < gridSize)
 	const largerGridSize = GRID_SIZES.find(size => size > gridSize)
 	const isBlank = !grid.some(Boolean)
@@ -351,9 +346,6 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 
 			<div className="creator">
 				<div className="canvas-heading">
-					{selectedCreation?.createdBy ? (
-						<p className="canvas-creator">Created by {selectedCreation.createdBy}</p>
-					) : null}
 					<button
 						className="action-button secondary-action desktop-board-action"
 						type="button"
@@ -555,18 +547,13 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 									event.preventDefault()
 									setGrid(creation.grid.split('').map(Number))
 								}}
-								title={creation.createdBy ? `Created by ${creation.createdBy}` : `${size}×${size}`}
+								title={`${size}×${size}`}
 							>
 								<span className="board-preview">
 									<svg viewBox={`0 0 ${size} ${size}`} aria-hidden="true" shapeRendering="crispEdges">
 										<path d={createGridPath(creation.grid)} />
 									</svg>
 								</span>
-								{creation.createdBy ? (
-									<span className="board-creator">
-										Created by <span className="board-creator-email">{creation.createdBy}</span>
-									</span>
-								) : null}
 								<span className="sr-only">
 									Open {size} by {size} creation
 								</span>

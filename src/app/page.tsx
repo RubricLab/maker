@@ -1,5 +1,5 @@
 import type { Metadata } from 'next/types'
-import { findCreation, listCreations } from '~/lib/board'
+import { listCreations } from '~/lib/board'
 import { RUBRIC_BINARY } from '~/lib/constants'
 import { GridImageCreator } from './maker'
 
@@ -38,14 +38,6 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 export default async function Page(props: Props) {
 	const searchParams = await props.searchParams
 	const initialGrid = searchParams.grid?.match(/^[01]+$/) ? searchParams.grid : createRandomGrid()
-	const initialCreation = findCreation(initialGrid)
-	const initialBoard = listCreations()
 
-	return (
-		<GridImageCreator
-			initialBoard={initialBoard}
-			initialCreation={initialCreation}
-			initialGrid={initialGrid}
-		/>
-	)
+	return <GridImageCreator initialBoard={listCreations()} initialGrid={initialGrid} />
 }
