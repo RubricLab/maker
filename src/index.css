@@ -255,6 +255,27 @@ button {
 	font-size: 13px;
 }
 
+.editor-notes,
+.danger-legend {
+	display: flex;
+	align-items: center;
+}
+
+.editor-notes {
+	gap: 14px;
+}
+
+.danger-legend {
+	gap: 5px;
+	white-space: nowrap;
+}
+
+.danger-swatch {
+	width: 12px;
+	aspect-ratio: 1;
+	background: repeating-linear-gradient(-45deg, transparent 0 3px, var(--buffer-hash) 3px 6px);
+}
+
 .size-button:focus-visible,
 .action-button:focus-visible,
 .board-icon:focus-visible {
@@ -700,10 +721,6 @@ button {
 }
 
 @media (max-width: 520px) {
-	.editor-meta {
-		justify-content: flex-end;
-	}
-
 	.editor-help {
 		display: none;
 	}

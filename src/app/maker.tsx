@@ -401,9 +401,15 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 					</div>
 
 					<div className="editor-meta">
-						<span className="editor-help">
-							Click and drag to paint. Start on a filled pixel to erase.
-						</span>
+						<div className="editor-notes">
+							<span className="editor-help">
+								Click and drag to paint. Start on a filled pixel to erase.
+							</span>
+							<span className="danger-legend">
+								<span className="danger-swatch" aria-hidden="true" />
+								Danger zone
+							</span>
+						</div>
 						<label className="background-toggle">
 							<span>Transparent</span>
 							<input
