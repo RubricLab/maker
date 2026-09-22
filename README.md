@@ -4,13 +4,13 @@ NxN pixel drawer with a shared board.
 
 ## Auth
 
-Email verification and passkey registration redirect straight to Maker. Users can register passkeys at `/auth/passkeys`, also linked from the board's Account link. Email remains available for recovery. No password or email allowlist.
+Email verification and passkey registration redirect straight to Maker. Users can register passkeys at `/auth/passkeys`. Email remains available for recovery. No password or email allowlist.
 
 Sessions use SameSite=Lax to support return visits from other sites. A same-origin `/auth/session` probe restores older Strict cookies. After a successful passkey registration/sign-in, a local browser hint enables an automatic passkey prompt when the session expires. Browsers without the hint offer conditional passkey autofill in the email field. The hint never grants access; all assertions still require server verification and device approval. Explicit sign-out suppresses automatic prompts on the resulting login page; cancelling a prompt leaves email/manual sign-in available.
 
 Uses `@simplewebauthn/server`, following rubrot's options/verify flow. Passkeys belong to individual users. Sessions last 30 days; email links last 15 minutes; WebAuthn challenges last 5 minutes. Links and challenges are single-use. Email links require a confirmation POST so inbox scanners cannot consume them.
 
-The Bun auth proxy protects Next.js, including assets and API routes. Bind both servers to loopback and route public traffic through the auth proxy. Caddy must overwrite `X-Real-IP`. The auth proxy overwrites `X-Maker-User-Email` with the verified email; Next.js uses that header for publishing credit. Never expose Next.js directly.
+The Bun auth proxy protects Next.js, including assets and API routes. On Railway, `src/railway.ts` starts Next.js on loopback and exposes only the auth proxy on `PORT`. The auth proxy overwrites `X-Maker-User-Email` with the verified email; Next.js uses that header for publishing credit. Never expose Next.js directly.
 
 The board stays shared across users. New icons show a muted one-line publisher credit on the thumbnail and a full credit above the canvas when selected, aligned with Add to board on desktop. Duplicate grids keep the first publisher's credit. Older icons remain unattributed. The board database adds a nullable `creator_email` column on startup.
 
@@ -20,14 +20,12 @@ Server-only environment:
 RESEND_API_KEY=...
 RESEND_SENDER_EMAIL=maker@rubric.email
 PUBLIC_ORIGIN=https://maker.rubric.sh
-AUTH_DATABASE_PATH=/var/lib/maker/auth/auth.sqlite
-AUTH_PORT=8841
-UPSTREAM_ORIGIN=http://127.0.0.1:8840
+AUTH_DATABASE_PATH=/data/auth.sqlite
+DATABASE_PATH=/data/board.sqlite
+PORT=8080
 ```
 
-Start Next.js with `PORT=8840 bun --bun run start`, then `bun run auth`. For local development, set `PUBLIC_ORIGIN=http://localhost:8841`. Access via localhost, which browsers allow for WebAuthn. Preserve the auth SQLite database (including its WAL when backing up a running process), separate from the board database. Database files and the env file must stay private.
-
-Production: `/srv/demos/maker`; services `demo-maker` and `demo-maker-auth`; env `/etc/maker-auth.env`. Passkeys are scoped to `maker.rubric.sh` and cannot be used on other domains.
+On Railway, deploy the Dockerfile as one service with a persistent volume at `/data` and one replica. The `maker` project belongs to the Rubric Labs workspace. For local development, start Next.js with `PORT=8840 bun --bun run start`, then `bun run auth` with `PUBLIC_ORIGIN=http://localhost:8841`. Access via localhost, which browsers allow for WebAuthn. Preserve both SQLite databases (use SQLite `.backup` while running). Database files and env values must stay private. Passkeys are scoped to `maker.rubric.sh` and cannot be used on other domains.
 
 ## Checks
 
