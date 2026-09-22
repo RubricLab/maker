@@ -10,7 +10,7 @@
 	--hover: #f2f2f2;
 	--danger: #bc3f32;
 	--canvas-background: #ffffff;
-	--buffer-hash: #dddddd;
+	--buffer-hash: #f0f0f0;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,7 +23,7 @@
 		--hover: #222222;
 		--danger: #e37164;
 		--canvas-background: #000000;
-		--buffer-hash: #333333;
+		--buffer-hash: #1c1c1c;
 	}
 }
 

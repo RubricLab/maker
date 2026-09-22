@@ -6,8 +6,15 @@ import { GridImageCreator } from './maker'
 
 type Props = { searchParams: Promise<{ grid?: string }> }
 
-const createRandomGrid = (): string =>
-	Array.from({ length: 25 }, () => (Math.random() < 0.5 ? '0' : '1')).join('')
+const createRandomGrid = (): string => {
+	const size = 5
+	return Array.from({ length: size ** 2 }, (_, index) => {
+		const row = Math.floor(index / size)
+		const column = index % size
+		if (row === 0 || column === 0 || row === size - 1 || column === size - 1) return '0'
+		return Math.random() < 0.5 ? '0' : '1'
+	}).join('')
+}
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
 	const searchParams = await props.searchParams
