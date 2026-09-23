@@ -1,13 +1,13 @@
 'use client'
 
-import { ArrowRightIcon, ClipboardCopyIcon, DownloadIcon } from '@radix-ui/react-icons'
-import { createParser, useQueryState } from 'nuqs'
+import { createParser, parseAsBoolean, useQueryState } from 'nuqs'
 import { type FC, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useDarkMode } from '~/hooks/useDarkMode'
 import type { BoardCreation } from '~/lib/board'
 import { GRID_SIZES, RUBRIC_BINARY } from '~/lib/constants'
-import { type Game, GameOverlay, LifeIcon, SnakeIcon } from './games'
+import { type Game, GameOverlay, SnakeIcon } from './games'
+import { CopyIcon, DownloadIcon, LifeIcon } from './icons'
 
 const GRID_RESOLUTION = 99
 const PNG_TARGET_SIZE = 400
@@ -60,7 +60,10 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 		'grid',
 		parseAsBooleanString.withDefault(initialGrid.split('').map(char => Number(char)))
 	)
-	const [transparentBackground, setTransparentBackground] = useState(true)
+	const [transparentBackground, setTransparentBackground] = useQueryState(
+		'transparent',
+		parseAsBoolean.withDefault(true)
+	)
 	const [board, setBoard] = useState(initialBoard)
 	const [addingToBoard, setAddingToBoard] = useState(false)
 	const [addedGrid, setAddedGrid] = useState<string | null>(null)
@@ -403,7 +406,9 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 							<span>
 								{addingToBoard ? 'Adding…' : addedGrid === serializedGrid ? 'On board' : 'Add to board'}
 							</span>
-							<ArrowRightIcon aria-hidden="true" />
+							<span className="board-arrow">
+								<DownloadIcon />
+							</span>
 						</button>
 					</div>
 				</div>
@@ -552,7 +557,7 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 						<div className="export-actions">
 							<button className="action-button primary-action" type="button" onClick={copyAsPNG}>
 								<span className="action-label">
-									<ClipboardCopyIcon aria-hidden="true" />
+									<CopyIcon />
 									Copy PNG
 								</span>
 								<kbd>⌘C</kbd>
@@ -566,7 +571,7 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 							</button>
 							<button className="action-button secondary-action" type="button" onClick={copyAsSVG}>
 								<span className="action-label">
-									<ClipboardCopyIcon aria-hidden="true" />
+									<CopyIcon />
 									Copy SVG
 								</span>
 							</button>
@@ -585,7 +590,9 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 								<span>
 									{addingToBoard ? 'Adding…' : addedGrid === serializedGrid ? 'On board' : 'Add to board'}
 								</span>
-								<ArrowRightIcon aria-hidden="true" />
+								<span className="board-arrow">
+									<DownloadIcon />
+								</span>
 							</button>
 						</div>
 					</section>
@@ -606,7 +613,7 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 								className="board-icon"
 								data-popping={isPopping}
 								data-selected={creation.grid === serializedGrid}
-								href={`/?grid=${creation.grid}`}
+								href={`/?grid=${creation.grid}${transparentBackground ? '' : '&transparent=false'}`}
 								onFocus={() => setGrid(creation.grid.split('').map(Number))}
 								onClick={event => {
 									if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return

@@ -34,18 +34,6 @@ function TrophyIcon() {
 	)
 }
 
-export function LifeIcon() {
-	return (
-		<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-			<circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.5" />
-			<circle cx="2.5" cy="5" r="1.5" fill="currentColor" />
-			<circle cx="12.5" cy="3" r="1.5" fill="currentColor" />
-			<circle cx="13" cy="12" r="1.5" fill="currentColor" />
-			<circle cx="4" cy="13" r="1.5" fill="currentColor" />
-		</svg>
-	)
-}
-
 export function nextGeneration(cells: number[], size: number): number[] {
 	return cells.map((alive, index) => {
 		const x = index % size

@@ -679,7 +679,7 @@ button {
 	}
 
 	.creator {
-		grid-template-columns: 164px minmax(0, min(620px, calc(100svh - 170px)));
+		grid-template-columns: 164px minmax(0, min(800px, calc(100svh - 155px)));
 		align-self: start;
 	}
 
@@ -695,8 +695,14 @@ button {
 
 @media (min-width: 961px) and (max-width: 1600px) {
 	.maker {
+		--top-space: 64px;
+		grid-template-columns: minmax(0, 7fr) minmax(270px, 3fr);
 		width: 100%;
 		max-width: none;
+	}
+
+	.creator {
+		justify-content: start;
 	}
 }
 
@@ -836,6 +842,12 @@ button {
 }
 .game-actions .desktop-board-action {
 	margin-left: auto;
+}
+
+.board-arrow {
+	display: inline-flex;
+	flex-shrink: 0;
+	transform: rotate(-90deg);
 }
 .game-overlay {
 	position: fixed;
