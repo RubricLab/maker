@@ -39,5 +39,6 @@ export default async function Page(props: Props) {
 	const searchParams = await props.searchParams
 	const initialGrid = searchParams.grid?.match(/^[01]+$/) ? searchParams.grid : createRandomGrid()
 
-	return <GridImageCreator initialBoard={listCreations()} initialGrid={initialGrid} />
+	const initialBoard = await listCreations()
+	return <GridImageCreator initialBoard={initialBoard} initialGrid={initialGrid} />
 }

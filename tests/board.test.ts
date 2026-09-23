@@ -3,26 +3,37 @@ import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import postgres from 'postgres'
 import { imageOf, imageUrl, openaiResponse } from './stubs'
 
 const LEGACY_GRID = '1000000000000000000000000'
 const SHOWN_GRID = '0111001010011100101001110'
 const HIDDEN_GRID = '0000001110011100111000000'
 
+// This suite uses a disposable local Postgres database, never Railway production.
+const url = process.env.DATABASE_URL ?? 'postgres://localhost:55432/maker_test'
+if (!/^postgres(?:ql)?:\/\/[^/]*@?localhost:55432\/maker_test$/.test(url))
+	throw new Error('Board tests require local maker_test on port 55432')
+process.env.DATABASE_URL = url
+const admin = postgres(url)
+await admin`DROP TABLE IF EXISTS creations, snake_score`
+await admin.end()
+
 const directory = mkdtempSync(join(tmpdir(), 'maker-board-'))
 const databasePath = join(directory, 'board.sqlite')
 const legacy = new Database(databasePath, { create: true })
-legacy.exec(
-	`CREATE TABLE creations (id INTEGER PRIMARY KEY AUTOINCREMENT, grid TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), creator_email TEXT) STRICT; INSERT INTO creations (grid) VALUES ('${LEGACY_GRID}');`
-)
+legacy.exec(`
+	CREATE TABLE creations (id INTEGER PRIMARY KEY AUTOINCREMENT, grid TEXT NOT NULL UNIQUE,
+		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+		hidden INTEGER NOT NULL DEFAULT 0) STRICT;
+	INSERT INTO creations (grid) VALUES ('${LEGACY_GRID}');
+	CREATE TABLE snake_score (id INTEGER PRIMARY KEY, score INTEGER NOT NULL) STRICT;
+	INSERT INTO snake_score VALUES (1, 2);
+`)
 legacy.close()
-const previousPath = process.env.DATABASE_PATH
-process.env.DATABASE_PATH = databasePath
-const { addCreation, listCreations, findCreation } = await import('../src/lib/board')
+const { addCreation, listCreations, findCreation, sql } = await import('../src/lib/board')
 const { POST } = await import('../src/app/api/board/route')
 const { GET: getSnake, POST: postSnake } = await import('../src/app/api/snake/route')
-if (previousPath === undefined) delete process.env.DATABASE_PATH
-else process.env.DATABASE_PATH = previousPath
 
 // Stand in for the moderation API: one grid is offensive, and every image checked is recorded.
 const hiddenImage = imageUrl(HIDDEN_GRID)
@@ -35,26 +46,46 @@ globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
 	return Response.json(openaiResponse(image === hiddenImage))
 }) as typeof fetch
 
-afterAll(() => {
+afterAll(async () => {
 	globalThis.fetch = realFetch
+	await sql.end()
 	rmSync(directory, { force: true, recursive: true })
 })
 
 const publish = (grid: string) =>
 	POST(new Request('http://localhost/api/board', { body: JSON.stringify({ grid }), method: 'POST' }))
+const submit = (score: unknown, origin = 'http://localhost') =>
+	postSnake(
+		new Request('http://localhost/api/snake', {
+			body: JSON.stringify({ score }),
+			headers: { Origin: origin },
+			method: 'POST'
+		})
+	)
 
-test('migration adds the hidden flag and keeps legacy icons visible', () => {
-	expect(findCreation(LEGACY_GRID)).not.toBeNull()
-	expect(listCreations().map(creation => creation.grid)).toEqual([LEGACY_GRID])
+test('imports SQLite icons, timestamps, and Snake score idempotently', async () => {
+	for (let i = 0; i < 2; i++) {
+		const child = Bun.spawn({
+			cmd: [process.execPath, 'src/migrate.ts'],
+			env: { ...Bun.env, DATABASE_PATH: databasePath, DATABASE_URL: url },
+			stderr: 'inherit',
+			stdout: 'ignore'
+		})
+		expect(await child.exited).toBe(0)
+	}
+	expect((await findCreation(LEGACY_GRID))?.id).toBe(1)
+	expect((await listCreations()).map(creation => creation.grid)).toEqual([LEGACY_GRID])
+	expect(await (await getSnake()).json()).toEqual({ highScore: 2 })
+	const added = await addCreation('1100000000000000000000000', true)
+	expect(added.creation.id).toBe(2)
 })
 
-test('hidden creations are saved but left off the board', () => {
-	const hidden = addCreation('1100000000000000000000000', true)
-	expect(hidden.created).toBe(true)
-	expect(findCreation(hidden.creation.grid)).toEqual(hidden.creation)
-	expect(listCreations().some(creation => creation.id === hidden.creation.id)).toBe(false)
-	expect(addCreation(hidden.creation.grid, false).created).toBe(false)
-	expect(listCreations().some(creation => creation.id === hidden.creation.id)).toBe(false)
+test('hidden creations are saved but left off the board', async () => {
+	const hidden = await findCreation('1100000000000000000000000')
+	expect(hidden).not.toBeNull()
+	expect((await listCreations()).some(creation => creation.id === hidden?.id)).toBe(false)
+	expect((await addCreation(hidden?.grid ?? '', false)).created).toBe(false)
+	expect((await listCreations()).some(creation => creation.id === hidden?.id)).toBe(false)
 })
 
 test('API publishes anonymously and hides what moderation flags', async () => {
@@ -65,7 +96,7 @@ test('API publishes anonymously and hides what moderation flags', async () => {
 	const { creation } = (await hidden.json()) as { creation: { grid: string; id: number } }
 	expect(creation.grid).toBe(HIDDEN_GRID)
 	expect(creation).not.toHaveProperty('hidden')
-	const grids = listCreations().map(item => item.grid)
+	const grids = (await listCreations()).map(item => item.grid)
 	expect(grids).toContain(SHOWN_GRID)
 	expect(grids).not.toContain(HIDDEN_GRID)
 	expect(moderated).toHaveLength(2)
@@ -79,22 +110,14 @@ test('API answers duplicates without moderating again', async () => {
 })
 
 test('global Snake record persists and only increases', async () => {
-	expect(await getSnake().json()).toEqual({ highScore: 0 })
-	const submit = (score: unknown, origin = 'http://localhost') =>
-		postSnake(
-			new Request('http://localhost/api/snake', {
-				body: JSON.stringify({ score }),
-				headers: { Origin: origin },
-				method: 'POST'
-			})
-		)
+	expect(await (await getSnake()).json()).toEqual({ highScore: 2 })
 	expect((await submit(4)).status).toBe(200)
-	expect(await getSnake().json()).toEqual({ highScore: 4 })
+	expect(await (await getSnake()).json()).toEqual({ highScore: 4 })
 	expect(await (await submit(3)).json()).toEqual({ highScore: 4, newRecord: false })
 	expect(await (await submit(7)).json()).toEqual({ highScore: 7, newRecord: true })
 	expect((await submit(901)).status).toBe(400)
 	expect((await submit(8, 'https://other.example')).status).toBe(403)
-	expect(await getSnake().json()).toEqual({ highScore: 7 })
+	expect(await (await getSnake()).json()).toEqual({ highScore: 7 })
 })
 
 test('API rejects grids that are blank or an unsupported size', async () => {

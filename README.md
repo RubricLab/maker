@@ -10,17 +10,18 @@ Server-only environment:
 
 ```
 OPENAI_API_KEY=...
-DATABASE_PATH=/data/board-final.sqlite
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+DATABASE_PATH=/data/board-final.sqlite  # legacy import only
 ```
 
-Locally the database defaults to `data/maker.sqlite`. Keep database files and env values private.
+Use a local Postgres database for development. `DATABASE_URL` is required at runtime. Keep database credentials private.
 
 ## Production
 
-The `maker` project in Railway's Rubric Labs workspace deploys `RubricLab/maker` main as one service from the Dockerfile, with a persistent volume at `/data` and one replica. Next.js listens on Railway's `PORT`. `maker.rubric.sh` points directly to Railway. The old devbox services, app, and Caddy route have been removed; historical database snapshots remain in `/root/maker-migration` and `/var/lib/maker`. The auth database, the Resend variables, and `TYPESAFE_API_KEY` are no longer used. To score icons published before moderation, run `railway ssh -- bun run moderate` once. Preserve the board database (use SQLite `.backup` while running).
+The `maker` project in Railway's Rubric Labs workspace deploys `RubricLab/maker` main as one service from the Dockerfile, with Railway Postgres for board icons and the global Snake high score. Next.js listens on Railway's `PORT`. The old SQLite volume remains mounted for rollback. `src/migrate.ts` imports it idempotently at startup, preserving IDs, timestamps, hidden flags, and the high score; rerun it after the first cutover to catch writes made by the old instance while Railway switched traffic. `maker.rubric.sh` points directly to Railway. The old devbox services, app, and Caddy route have been removed; historical database snapshots remain in `/root/maker-migration` and `/var/lib/maker`. The auth database, the Resend variables, and `TYPESAFE_API_KEY` are no longer used. To rescore icons after an outage, run `railway ssh -- bun run moderate`. Keep `/data/board-pre-postgres.sqlite` as a rollback snapshot.
 
-For local development, `bun run dev`, or `bun --bun run build` then `PORT=8840 bun --bun run start`.
+For local development, set `DATABASE_URL` and run `bun run dev`, or `bun --bun run build` then `PORT=8840 bun --bun run start`.
 
 ## Checks
 
-`bun test` covers the board database, the migration, the API, and moderation with a stubbed API. `bun x tsc --noEmit` and `bun --bun run build` check the app. After building, `bun tests/verify-board.ts` publishes a shown and a hidden icon through a real browser against Next.js with an isolated database and a stub moderation API, and saves screenshots in the system temp directory. Install the browser with `bun --bun x playwright install chromium` if needed.
+`bun test` covers Postgres, the SQLite import, the API, and moderation with a stubbed API. Use a local `maker_test` database on port 55432. `bun x tsc --noEmit` and `bun --bun run build` check the app. After building, `bun tests/verify-board.ts` checks publishing in a browser with an isolated database and a stub moderation API.

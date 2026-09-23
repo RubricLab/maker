@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
+import postgres from 'postgres'
 import { imageOf, imageUrl, openaiResponse } from './stubs'
 
 const SHOWN_GRID = '0111001010011100101001110'
@@ -26,6 +27,10 @@ const reserved = Bun.serve({ fetch: () => new Response(''), hostname: '127.0.0.1
 const port = reserved.port
 reserved.stop(true)
 const origin = `http://127.0.0.1:${port}`
+const databaseName = `maker_browser_${port}`
+const admin = postgres('postgres://localhost:55432/postgres')
+await admin`CREATE DATABASE ${admin(databaseName)}`
+await admin.end()
 const app = Bun.spawn({
 	cmd: [
 		process.execPath,
@@ -39,7 +44,7 @@ const app = Bun.spawn({
 	],
 	env: {
 		...process.env,
-		DATABASE_PATH: join(directory, 'board.sqlite'),
+		DATABASE_URL: `postgres://localhost:55432/${databaseName}`,
 		NEXT_TELEMETRY_DISABLED: '1',
 		OPENAI_API_KEY: 'test',
 		OPENAI_BASE_URL: `http://127.0.0.1:${moderation.port}/v1`
@@ -144,5 +149,8 @@ try {
 	moderation.stop(true)
 	app.kill('SIGKILL')
 	await app.exited
+	const cleanup = postgres('postgres://localhost:55432/postgres')
+	await cleanup`DROP DATABASE ${cleanup(databaseName)} WITH (FORCE)`
+	await cleanup.end()
 	rmSync(directory, { force: true, recursive: true })
 }

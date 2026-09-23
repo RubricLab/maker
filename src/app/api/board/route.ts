@@ -32,11 +32,9 @@ const isRateLimited = (request: Request): boolean => {
 	return false
 }
 
-export function GET() {
-	return NextResponse.json(
-		{ creations: listCreations() },
-		{ headers: { 'Cache-Control': 'no-store' } }
-	)
+export async function GET() {
+	const creations = await listCreations()
+	return NextResponse.json({ creations }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(request: Request) {
@@ -57,10 +55,10 @@ export async function POST(request: Request) {
 	}
 
 	// Moderation is only paid for once per distinct grid; the publisher never learns the verdict.
-	const existing = findCreation(grid)
+	const existing = await findCreation(grid)
 	const result = existing
 		? { created: false, creation: existing }
-		: addCreation(grid, await shouldHide(grid))
+		: await addCreation(grid, await shouldHide(grid))
 	return NextResponse.json(result, {
 		headers: { 'Cache-Control': 'no-store' },
 		status: result.created ? 201 : 200

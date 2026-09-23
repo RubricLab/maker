@@ -5,4 +5,4 @@ RUN bun install --frozen-lockfile
 COPY . .
 RUN bun --bun run build
 EXPOSE 8080
-CMD ["bun", "--bun", "run", "start"]
+CMD ["sh", "-c", "bun src/migrate.ts && bun --bun run start"]

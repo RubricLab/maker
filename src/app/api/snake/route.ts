@@ -5,8 +5,9 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 const headers = { 'Cache-Control': 'no-store' }
 
-export function GET() {
-	return NextResponse.json({ highScore: snakeHighScore() }, { headers })
+export async function GET() {
+	const highScore = await snakeHighScore()
+	return NextResponse.json({ highScore }, { headers })
 }
 
 export async function POST(request: Request) {
@@ -21,5 +22,6 @@ export async function POST(request: Request) {
 	const score = (body as { score?: unknown } | null)?.score
 	if (!Number.isInteger(score) || typeof score !== 'number' || score < 0 || score > 900)
 		return NextResponse.json({ error: 'Invalid score.' }, { headers, status: 400 })
-	return NextResponse.json(recordSnakeScore(score), { headers })
+	const result = await recordSnakeScore(score)
+	return NextResponse.json(result, { headers })
 }
