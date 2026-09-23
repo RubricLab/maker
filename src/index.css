@@ -250,26 +250,25 @@ button {
 	background: var(--canvas-background);
 }
 
-.poof {
+.clear-fade {
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
+	animation: clear-fade 180ms ease-out forwards;
 }
 
-.poof-cell {
+.clear-cell {
 	position: absolute;
 	background: var(--foreground);
-	animation: pixel-poof 550ms ease-out both;
 }
 
-.pixel-grid[data-transparent="true"] .poof-cell {
+.pixel-grid[data-transparent="true"] .clear-cell {
 	background: #fff;
 }
 
-@keyframes pixel-poof {
+@keyframes clear-fade {
 	to {
 		opacity: 0;
-		transform: translate(var(--dx), var(--dy)) scale(0);
 	}
 }
 
@@ -808,12 +807,11 @@ button {
 		transition: none;
 	}
 
-	.board-icon[data-popping="true"],
-	.poof-cell {
+	.board-icon[data-popping="true"] {
 		animation: none;
 	}
 
-	.poof-cell {
+	.clear-fade {
 		display: none;
 	}
 }

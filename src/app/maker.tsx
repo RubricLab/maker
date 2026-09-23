@@ -1,21 +1,8 @@
 'use client'
 
-import {
-	ArrowLeftIcon,
-	ArrowRightIcon,
-	ClipboardCopyIcon,
-	DownloadIcon
-} from '@radix-ui/react-icons'
+import { ArrowRightIcon, ClipboardCopyIcon, DownloadIcon } from '@radix-ui/react-icons'
 import { createParser, useQueryState } from 'nuqs'
-import {
-	type CSSProperties,
-	type FC,
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState
-} from 'react'
+import { type FC, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useDarkMode } from '~/hooks/useDarkMode'
 import type { BoardCreation } from '~/lib/board'
@@ -78,7 +65,9 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 	const [addingToBoard, setAddingToBoard] = useState(false)
 	const [addedGrid, setAddedGrid] = useState<string | null>(null)
 	const [poppingCreation, setPoppingCreation] = useState({ id: 0, nonce: 0 })
-	const [poof, setPoof] = useState<{ cells: number[]; size: number; nonce: number } | null>(null)
+	const [clearing, setClearing] = useState<{ cells: number[]; size: number; nonce: number } | null>(
+		null
+	)
 	const [game, setGame] = useState<Game | null>(null)
 
 	const darkMode = useDarkMode()
@@ -324,7 +313,7 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 	const clearGrid = useCallback((): void => {
 		const cells = grid.flatMap((cell, index) => (cell ? [index] : []))
 		if (!cells.length) return
-		setPoof(previous => ({ cells, nonce: (previous?.nonce ?? 0) + 1, size: gridSize }))
+		setClearing(previous => ({ cells, nonce: (previous?.nonce ?? 0) + 1, size: gridSize }))
 		setGrid(Array(grid.length).fill(0))
 	}, [grid, gridSize, setGrid])
 
@@ -386,9 +375,7 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 							onClick={clearGrid}
 							disabled={isBlank}
 						>
-							<span className="action-label">
-								<ArrowLeftIcon aria-hidden="true" /> Clear
-							</span>
+							<span>Clear</span>
 							<kbd>⌘⌫</kbd>
 						</button>
 						{gridSize === 30 && (
@@ -478,33 +465,25 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 										/>
 									)
 								})}
-								{poof && (
+								{clearing && (
 									<div
-										key={poof.nonce}
-										className="poof"
+										key={clearing.nonce}
+										className="clear-fade"
 										aria-hidden="true"
-										onAnimationEnd={() => setPoof(null)}
+										onAnimationEnd={() => setClearing(null)}
 									>
-										{poof.cells.map(index => {
-											const angle = index * 2.39996
-											const distance = 12 + (index % 5) * 6
-											return (
-												<span
-													key={index}
-													className="poof-cell"
-													style={
-														{
-															'--dx': `${Math.cos(angle) * distance}px`,
-															'--dy': `${Math.sin(angle) * distance}px`,
-															height: `${100 / poof.size}%`,
-															left: `${((index % poof.size) * 100) / poof.size}%`,
-															top: `${(Math.floor(index / poof.size) * 100) / poof.size}%`,
-															width: `${100 / poof.size}%`
-														} as CSSProperties
-													}
-												/>
-											)
-										})}
+										{clearing.cells.map(index => (
+											<span
+												key={index}
+												className="clear-cell"
+												style={{
+													height: `${100 / clearing.size}%`,
+													left: `${((index % clearing.size) * 100) / clearing.size}%`,
+													top: `${(Math.floor(index / clearing.size) * 100) / clearing.size}%`,
+													width: `${100 / clearing.size}%`
+												}}
+											/>
+										))}
 									</div>
 								)}
 							</div>
