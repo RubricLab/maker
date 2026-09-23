@@ -3,7 +3,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { filledCells, jevResponse } from './stubs'
+import { imageOf, imageUrl, openaiResponse } from './stubs'
 
 const LEGACY_GRID = '1000000000000000000000000'
 const SHOWN_GRID = '0111001010011100101001110'
@@ -24,15 +24,15 @@ const { GET: getSnake, POST: postSnake } = await import('../src/app/api/snake/ro
 if (previousPath === undefined) delete process.env.DATABASE_PATH
 else process.env.DATABASE_PATH = previousPath
 
-// Stand in for Jev: one grid is offensive, and every request is counted.
-const hiddenCells = HIDDEN_GRID.split('1').length - 1
-const moderated: number[] = []
+// Stand in for the moderation API: one grid is offensive, and every image checked is recorded.
+const hiddenImage = imageUrl(HIDDEN_GRID)
+const moderated: string[] = []
 const realFetch = globalThis.fetch
-process.env.TYPESAFE_API_KEY = 'test'
+process.env.OPENAI_API_KEY = 'test'
 globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
-	const cells = filledCells(JSON.parse(init?.body as string))
-	moderated.push(cells)
-	return Response.json(jevResponse(cells === hiddenCells ? 0.9 : 0.1))
+	const image = imageOf(JSON.parse(init?.body as string))
+	moderated.push(image)
+	return Response.json(openaiResponse(image === hiddenImage))
 }) as typeof fetch
 
 afterAll(() => {
@@ -68,14 +68,14 @@ test('API publishes anonymously and hides what moderation flags', async () => {
 	const grids = listCreations().map(item => item.grid)
 	expect(grids).toContain(SHOWN_GRID)
 	expect(grids).not.toContain(HIDDEN_GRID)
-	expect(moderated).toHaveLength(8)
+	expect(moderated).toHaveLength(2)
 })
 
 test('API answers duplicates without moderating again', async () => {
 	const duplicate = await publish(HIDDEN_GRID)
 	expect(duplicate.status).toBe(200)
 	expect(((await duplicate.json()) as { created: boolean }).created).toBe(false)
-	expect(moderated).toHaveLength(8)
+	expect(moderated).toHaveLength(2)
 })
 
 test('global Snake record persists and only increases', async () => {

@@ -3,7 +3,7 @@
 import { listAllCreations, setHidden } from './lib/board'
 import { shouldHide } from './lib/moderation'
 
-if (!process.env.TYPESAFE_API_KEY) throw new Error('TYPESAFE_API_KEY is required')
+if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is required')
 
 const creations = listAllCreations()
 let changed = 0

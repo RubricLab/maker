@@ -1,79 +1,83 @@
 import { afterAll, beforeEach, expect, test } from 'bun:test'
-import { offensiveness, shouldHide } from '../src/lib/moderation'
-import { HARMLESS, OFFENSIVE } from '../src/lib/references'
-import { jevResponse } from './stubs'
+import { inflateSync } from 'node:zlib'
+import { shouldHide, verdict } from '../src/lib/moderation'
+import { renderGridPng } from '../src/lib/png'
+import { imageOf, imageUrl, openaiResponse } from './stubs'
 
 const GRID = '1111010001111101010010010'
 const realFetch = globalThis.fetch
-const originalKey = process.env.TYPESAFE_API_KEY
-const stub = { p: 0.5, status: 200 }
-const requests: { state: { drawing: string[]; [key: string]: unknown } }[] = []
+const originalKey = process.env.OPENAI_API_KEY
+const stub = { hide: false, refusal: false, status: 200 }
+const requests: Record<string, unknown>[] = []
 globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
 	requests.push(JSON.parse(init?.body as string))
-	return Response.json(stub.status === 200 ? jevResponse(stub.p) : { error: 'bad' }, {
-		status: stub.status
-	})
+	return Response.json(
+		stub.status === 200 ? openaiResponse(stub.hide, stub.refusal) : { error: { message: 'bad' } },
+		{ status: stub.status }
+	)
 }) as typeof fetch
 
 beforeEach(() => {
-	process.env.TYPESAFE_API_KEY = 'test'
-	Object.assign(stub, { p: 0.5, status: 200 })
+	process.env.OPENAI_API_KEY = 'test'
+	Object.assign(stub, { hide: false, refusal: false, status: 200 })
 	requests.length = 0
 })
 
 afterAll(() => {
 	globalThis.fetch = realFetch
-	if (originalKey === undefined) delete process.env.TYPESAFE_API_KEY
-	else process.env.TYPESAFE_API_KEY = originalKey
+	if (originalKey === undefined) delete process.env.OPENAI_API_KEY
+	else process.env.OPENAI_API_KEY = originalKey
 })
 
-test('references are square pictures and the symmetric ones repeat under rotation', () => {
-	const rotate = (rows: string[]) =>
-		rows.map((_, x) =>
-			rows
-				.map(row => row[x])
-				.reverse()
-				.join('')
-		)
-	for (const rows of [...Object.values(OFFENSIVE).flat(), ...Object.values(HARMLESS)]) {
-		expect(rows.every(row => row.length === rows.length && /^[#.]+$/.test(row))).toBe(true)
-		expect(rows.some(row => row.includes('#'))).toBe(true)
+test('renders a grid as a valid grayscale PNG', () => {
+	const png = renderGridPng(GRID)
+	const view = new DataView(png.buffer, png.byteOffset)
+	expect([...png.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
+	expect(new TextDecoder().decode(png.subarray(12, 16))).toBe('IHDR')
+	const width = view.getUint32(16)
+	expect(width).toBe(476) // 5 cells plus a one-cell margin, 68px each.
+	expect(view.getUint32(20)).toBe(width)
+	expect([...png.subarray(24, 29)]).toEqual([8, 0, 0, 0, 0])
+	const idatLength = view.getUint32(33)
+	expect(new TextDecoder().decode(png.subarray(37, 41))).toBe('IDAT')
+	const pixels = inflateSync(png.subarray(41, 41 + idatLength))
+	expect(pixels.length).toBe((width + 1) * width)
+	const pixel = (x: number, y: number) => pixels[y * (width + 1) + 1 + x]
+	expect(pixel(0, 0)).toBe(255) // Margin.
+	expect(pixel(68, 68)).toBe(0) // Cell (0, 0) is filled.
+	expect(pixel(68 * 5, 68)).toBe(255) // Cell (4, 0) is empty.
+	expect(pixel(68, 68 * 2)).toBe(0) // Cell (0, 1) is filled.
+})
+
+test('sends the rendered grid and asks for a strict structured verdict', async () => {
+	expect(await verdict(GRID)).toEqual({ depicts: 'test', hide: false })
+	expect(requests).toHaveLength(1)
+	const request = requests[0] as {
+		input: { content: { image_url?: string; type: string }[] }[]
+		model: string
+		reasoning: { effort: string }
+		text: { format: { strict: boolean; type: string } }
 	}
-	const odd = Object.values(OFFENSIVE)[0]?.[3] as string[]
-	expect(rotate(odd)).toEqual(odd)
+	expect(request.model).toBe('gpt-6-sol')
+	expect(request.reasoning).toEqual({ effort: 'low' })
+	expect(request.text.format).toMatchObject({ strict: true, type: 'json_schema' })
+	expect(imageOf(request)).toBe(imageUrl(GRID))
 })
 
-test('sends the explained grid first, then the drawing and references, for four rotations', async () => {
-	await offensiveness(GRID)
-	expect(requests).toHaveLength(4)
-	const { state } = requests[0] as (typeof requests)[number]
-	expect(Object.keys(state)).toEqual([
-		'instructions',
-		'drawing',
-		'offensive_references',
-		'harmless_references'
-	])
-	expect(state.instructions).toContain('5 by 5 grid')
-	expect(state.drawing).toEqual(['####.', '#...#', '####.', '#.#..', '#..#.'])
-	expect(requests.map(request => request.state.drawing[0])).toEqual([
-		'####.',
-		'#####',
-		'.#..#',
-		'.#...'
-	])
-})
-
-test('hides at the threshold and shows below it', async () => {
-	stub.p = 0.45
+test('hides on a hide verdict and shows otherwise', async () => {
+	stub.hide = true
 	expect(await shouldHide(GRID)).toBe(true)
-	stub.p = 0.44
+	stub.hide = false
 	expect(await shouldHide(GRID)).toBe(false)
 })
 
 test('hides whatever cannot be decided', async () => {
 	stub.status = 400
 	expect(await shouldHide(GRID)).toBe(true)
-	delete process.env.TYPESAFE_API_KEY
+	stub.status = 200
+	stub.refusal = true
+	expect(await shouldHide(GRID)).toBe(true)
+	delete process.env.OPENAI_API_KEY
 	requests.length = 0
 	expect(await shouldHide(GRID)).toBe(true)
 	expect(requests).toHaveLength(0)

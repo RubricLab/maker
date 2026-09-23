@@ -1,22 +1,22 @@
-// Run after bun --bun run build. Uses an isolated database and a stub Jev, never the live board.
+// Run after bun --bun run build. Uses an isolated database and a stub moderation API, never the live board.
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
-import { filledCells, jevResponse } from './stubs'
+import { imageOf, imageUrl, openaiResponse } from './stubs'
 
 const SHOWN_GRID = '0111001010011100101001110'
 const HIDDEN_GRID = '0000001110011100111000000'
 
-const hiddenCells = HIDDEN_GRID.split('1').length - 1
+const hiddenImage = imageUrl(HIDDEN_GRID)
 let moderations = 0
-// Stands in for Jev: the hidden grid is clearly offensive, the shown one clearly fine.
+// Stands in for the moderation API: the hidden grid is offensive, the shown one is fine.
 const moderation = Bun.serve({
 	async fetch(request) {
 		moderations++
-		const cells = filledCells((await request.json()) as { state: { drawing: string[] } })
-		return Response.json(jevResponse(cells === hiddenCells ? 0.9 : 0.1))
+		const body = (await request.json()) as Parameters<typeof imageOf>[0]
+		return Response.json(openaiResponse(imageOf(body) === hiddenImage))
 	},
 	hostname: '127.0.0.1',
 	port: 0
@@ -41,8 +41,8 @@ const app = Bun.spawn({
 		...process.env,
 		DATABASE_PATH: join(directory, 'board.sqlite'),
 		NEXT_TELEMETRY_DISABLED: '1',
-		TYPESAFE_API_KEY: 'test',
-		TYPESAFE_BASE_URL: `http://127.0.0.1:${moderation.port}`
+		OPENAI_API_KEY: 'test',
+		OPENAI_BASE_URL: `http://127.0.0.1:${moderation.port}/v1`
 	},
 	stderr: 'inherit',
 	stdout: 'ignore'
@@ -94,7 +94,7 @@ try {
 	})
 	assert.equal(duplicate.status(), 200)
 	assert.equal(((await duplicate.json()) as { created: boolean }).created, false)
-	assert.equal(moderations, 8)
+	assert.equal(moderations, 2)
 
 	assert.equal(await page.getByRole('button', { name: 'Play snake' }).count(), 0)
 	const icon = page.locator('link[data-maker-canvas-icon]')
