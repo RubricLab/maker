@@ -1,5 +1,5 @@
 import '../index.css'
-import { NuqsAdapter } from 'nuqs/adapters/react'
+import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import { Toaster } from 'sonner'
 
 export const metadata = {
