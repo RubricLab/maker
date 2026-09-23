@@ -304,6 +304,10 @@ button {
 	background: repeating-linear-gradient(-45deg, transparent 0 5px, #ffffff24 5px 10px);
 }
 
+.pixel-grid[data-transparent="true"] .pixel-cell[data-active="true"][data-buffer="true"]::after {
+	background: repeating-linear-gradient(-45deg, transparent 0 5px, #000 5px 10px);
+}
+
 .pixel-cell:focus-visible {
 	position: relative;
 	z-index: 1;
