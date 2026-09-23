@@ -115,7 +115,8 @@ button {
 	max-width: 1320px;
 	min-height: 100svh;
 	margin: 0 auto;
-	padding: max(64px, calc((100svh - 710px) / 2)) 0 48px;
+	--top-space: max(64px, calc((100svh - 710px) / 2));
+	padding: var(--top-space) 0 48px;
 }
 
 .creator {
@@ -227,6 +228,7 @@ button {
 }
 
 .pixel-grid {
+	position: relative;
 	display: grid;
 	grid-area: grid;
 	width: 100%;
@@ -239,8 +241,36 @@ button {
 	user-select: none;
 }
 
+.pixel-grid[data-transparent="true"] {
+	background-color: #000;
+	background-size: 100% 100%;
+}
+
 .pixel-grid[data-transparent="false"] {
 	background: var(--canvas-background);
+}
+
+.poof {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+.poof-cell {
+	position: absolute;
+	background: var(--foreground);
+	animation: pixel-poof 550ms ease-out both;
+}
+
+.pixel-grid[data-transparent="true"] .poof-cell {
+	background: #fff;
+}
+
+@keyframes pixel-poof {
+	to {
+		opacity: 0;
+		transform: translate(var(--dx), var(--dy)) scale(0);
+	}
 }
 
 .pixel-cell {
@@ -264,6 +294,14 @@ button {
 	background: repeating-linear-gradient(-45deg, transparent 0 5px, var(--buffer-hash) 5px 10px);
 	content: "";
 	pointer-events: none;
+}
+
+.pixel-grid[data-transparent="true"] .pixel-cell[data-active="true"] {
+	background: #fff;
+}
+
+.pixel-grid[data-transparent="true"] .pixel-cell[data-buffer="true"]::after {
+	background: repeating-linear-gradient(-45deg, transparent 0 5px, #ffffff24 5px 10px);
 }
 
 .pixel-cell:focus-visible {
@@ -408,14 +446,6 @@ button {
 	letter-spacing: 0;
 }
 
-.board-heading {
-	display: flex;
-	min-height: 30px;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: 14px;
-}
-
 .background-toggle {
 	position: relative;
 	display: flex;
@@ -528,7 +558,6 @@ button {
 }
 
 .clear-action {
-	margin-top: 4px;
 	border-color: transparent;
 	background: transparent;
 	color: var(--danger);
@@ -566,12 +595,6 @@ button {
 	min-height: 120px;
 }
 
-.board-heading h2 {
-	margin: 0;
-	font-size: 15px;
-	font-weight: 600;
-}
-
 .board-status {
 	margin: 14px 0 0;
 	color: var(--secondary);
@@ -582,7 +605,6 @@ button {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 10px;
-	margin-top: 14px;
 }
 
 .board-icon {
@@ -663,7 +685,8 @@ button {
 	}
 
 	.board {
-		height: 100%;
+		height: 100svh;
+		margin-top: calc(-1 * var(--top-space));
 		min-height: 0;
 		overflow-y: auto;
 		overscroll-behavior: contain;
@@ -687,6 +710,10 @@ button {
 
 	.creator {
 		display: block;
+	}
+
+	.canvas-heading {
+		padding-left: 20px;
 	}
 
 	.desktop-board-action {
@@ -747,6 +774,10 @@ button {
 		padding-top: 13px;
 		border-top: 1px solid var(--border);
 	}
+
+	.board-grid {
+		margin-top: 0;
+	}
 }
 
 @media (max-width: 520px) {
@@ -777,30 +808,29 @@ button {
 		transition: none;
 	}
 
-	.board-icon[data-popping="true"] {
+	.board-icon[data-popping="true"],
+	.poof-cell {
 		animation: none;
+	}
+
+	.poof-cell {
+		display: none;
 	}
 }
 
-.game-actions,
-.mobile-game-actions {
+.game-actions {
 	display: flex;
+	width: 100%;
 	align-items: center;
-	justify-content: flex-end;
 	gap: 6px;
-	margin-left: auto;
 }
-.game-actions .action-button,
-.mobile-game-actions .action-button {
+.game-actions .action-button {
 	min-height: 32px;
 	padding: 5px 8px;
 	justify-content: center;
 }
 .game-actions .desktop-board-action {
-	margin-left: 0;
-}
-.mobile-game-actions {
-	display: none;
+	margin-left: auto;
 }
 .game-overlay {
 	position: fixed;
@@ -867,15 +897,11 @@ button {
 }
 @media (max-width: 960px) {
 	.game-actions {
-		display: none;
+		flex-wrap: wrap;
+		justify-content: flex-start;
 	}
-	.mobile-game-actions {
-		display: flex;
-		grid-column: 1 / -1;
-		margin: 0;
-	}
-	.mobile-game-actions .action-button {
-		flex: 1;
+	.game-actions .action-button {
+		flex: 0 1 auto;
 	}
 	.game-grid {
 		width: min(100vw, calc(100svh - 115px));

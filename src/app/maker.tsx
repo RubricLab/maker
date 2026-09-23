@@ -1,8 +1,21 @@
 'use client'
 
-import { ArrowRightIcon, ClipboardCopyIcon, DownloadIcon } from '@radix-ui/react-icons'
+import {
+	ArrowLeftIcon,
+	ArrowRightIcon,
+	ClipboardCopyIcon,
+	DownloadIcon
+} from '@radix-ui/react-icons'
 import { createParser, useQueryState } from 'nuqs'
-import { type FC, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+	type CSSProperties,
+	type FC,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState
+} from 'react'
 import { toast } from 'sonner'
 import { useDarkMode } from '~/hooks/useDarkMode'
 import type { BoardCreation } from '~/lib/board'
@@ -12,6 +25,19 @@ import { type Game, GameOverlay, LifeIcon, SnakeIcon } from './games'
 const GRID_RESOLUTION = 99
 const PNG_TARGET_SIZE = 400
 const RUBRIC_LOGO = '101110100'
+
+// Fixed positions keep the preview stable across renders and server hydration.
+const starfield = `url("data:image/svg+xml,${encodeURIComponent(
+	`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">${Array.from(
+		{ length: 110 },
+		(_, i) => {
+			const x = (i * 239.7 + 47) % 600
+			const y = (i * i * 73.3 + i * 157.1 + 31) % 600
+			const radius = i % 9 === 0 ? 1.2 : 0.6
+			return `<circle cx="${x}" cy="${y}" r="${radius}" fill="white" opacity="${i % 4 === 0 ? 0.8 : 0.45}"/>`
+		}
+	).join('')}</svg>`
+)}")`
 
 type GridImageCreatorProps = {
 	initialBoard: BoardCreation[]
@@ -52,6 +78,7 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 	const [addingToBoard, setAddingToBoard] = useState(false)
 	const [addedGrid, setAddedGrid] = useState<string | null>(null)
 	const [poppingCreation, setPoppingCreation] = useState({ id: 0, nonce: 0 })
+	const [poof, setPoof] = useState<{ cells: number[]; size: number; nonce: number } | null>(null)
 	const [game, setGame] = useState<Game | null>(null)
 
 	const darkMode = useDarkMode()
@@ -294,11 +321,25 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 		}
 	}
 
+	const clearGrid = useCallback((): void => {
+		const cells = grid.flatMap((cell, index) => (cell ? [index] : []))
+		if (!cells.length) return
+		setPoof(previous => ({ cells, nonce: (previous?.nonce ?? 0) + 1, size: gridSize }))
+		setGrid(Array(grid.length).fill(0))
+	}, [grid, gridSize, setGrid])
+
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent): void => {
-			if (!(event.metaKey || event.ctrlKey)) return
+			if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || game) return
+			const target = event.target as HTMLElement | null
+			if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
 
 			const key = event.key.toLowerCase()
+			if (key === 'backspace') {
+				event.preventDefault()
+				clearGrid()
+				return
+			}
 			if (key === 's') {
 				event.preventDefault()
 				void downloadAsPNG()
@@ -306,19 +347,13 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 			}
 
 			if (key !== 'c') return
-			const target = event.target as HTMLElement | null
-			if (target && /^(input|textarea|select)$/i.test(target.tagName)) return
 			event.preventDefault()
 			void copyAsPNG()
 		}
 
 		window.addEventListener('keydown', handleKeyDown)
 		return () => window.removeEventListener('keydown', handleKeyDown)
-	}, [copyAsPNG, downloadAsPNG])
-
-	const clearGrid = (): void => {
-		setGrid(Array(gridSize ** 2).fill(0))
-	}
+	}, [clearGrid, copyAsPNG, downloadAsPNG, game])
 
 	return (
 		<main className="maker">
@@ -345,6 +380,17 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 			<div className="creator">
 				<div className="canvas-heading">
 					<div className="game-actions">
+						<button
+							className="action-button clear-action"
+							type="button"
+							onClick={clearGrid}
+							disabled={isBlank}
+						>
+							<span className="action-label">
+								<ArrowLeftIcon aria-hidden="true" /> Clear
+							</span>
+							<kbd>⌘⌫</kbd>
+						</button>
 						{gridSize === 30 && (
 							<button
 								className="action-button secondary-action"
@@ -397,7 +443,10 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 							<div
 								className="pixel-grid"
 								data-transparent={transparentBackground}
-								style={{ gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}
+								style={{
+									gridTemplateColumns: `repeat(${gridSize}, 1fr)`,
+									...(transparentBackground ? { backgroundImage: starfield } : {})
+								}}
 							>
 								{grid.map((cell, index) => {
 									const row = Math.floor(index / gridSize)
@@ -429,6 +478,35 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 										/>
 									)
 								})}
+								{poof && (
+									<div
+										key={poof.nonce}
+										className="poof"
+										aria-hidden="true"
+										onAnimationEnd={() => setPoof(null)}
+									>
+										{poof.cells.map(index => {
+											const angle = index * 2.39996
+											const distance = 12 + (index % 5) * 6
+											return (
+												<span
+													key={index}
+													className="poof-cell"
+													style={
+														{
+															'--dx': `${Math.cos(angle) * distance}px`,
+															'--dy': `${Math.sin(angle) * distance}px`,
+															height: `${100 / poof.size}%`,
+															left: `${((index % poof.size) * 100) / poof.size}%`,
+															top: `${(Math.floor(index / poof.size) * 100) / poof.size}%`,
+															width: `${100 / poof.size}%`
+														} as CSSProperties
+													}
+												/>
+											)
+										})}
+									</div>
+								)}
 							</div>
 						)}
 					</div>
@@ -493,24 +571,6 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 						</h2>
 
 						<div className="export-actions">
-							<div className="mobile-game-actions">
-								{gridSize === 30 && (
-									<button
-										className="action-button secondary-action"
-										type="button"
-										onClick={() => setGame('snake')}
-									>
-										<SnakeIcon /> Play snake
-									</button>
-								)}
-								<button
-									className="action-button secondary-action"
-									type="button"
-									onClick={() => setGame('life')}
-								>
-									<LifeIcon /> Play Game of Life
-								</button>
-							</div>
 							<button className="action-button primary-action" type="button" onClick={copyAsPNG}>
 								<span className="action-label">
 									<ClipboardCopyIcon aria-hidden="true" />
@@ -548,23 +608,12 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 								</span>
 								<ArrowRightIcon aria-hidden="true" />
 							</button>
-							<button
-								className="action-button clear-action"
-								type="button"
-								onClick={clearGrid}
-								disabled={isBlank}
-							>
-								Clear
-							</button>
 						</div>
 					</section>
 				</div>
 			</div>
 
-			<section className="board" aria-labelledby="board-title">
-				<div className="board-heading">
-					<h2 id="board-title">Board</h2>
-				</div>
+			<section className="board" aria-label="Board">
 				{board.length === 0 ? (
 					<p className="board-status">Nothing here yet. Add the first one.</p>
 				) : null}
