@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { addCreation, findCreation, listCreations } from '~/lib/board'
+import { addCreation, findCreation, listCreations, nearHidden } from '~/lib/board'
 import { shouldHide } from '~/lib/moderation'
 
 export const dynamic = 'force-dynamic'
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
 	const existing = await findCreation(grid)
 	const result = existing
 		? { created: false, creation: existing }
-		: await addCreation(grid, await shouldHide(grid))
+		: await addCreation(grid, (await nearHidden(grid)) || (await shouldHide(grid)))
 	return NextResponse.json(result, {
 		headers: { 'Cache-Control': 'no-store' },
 		status: result.created ? 201 : 200

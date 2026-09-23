@@ -109,6 +109,18 @@ test('API answers duplicates without moderating again', async () => {
 	expect(moderated).toHaveLength(2)
 })
 
+test('API hides near-copies of a hidden icon without asking the model', async () => {
+	const variant = `1${HIDDEN_GRID.slice(1)}`
+	const near = await publish(variant)
+	expect(near.status).toBe(201)
+	expect((await listCreations()).map(item => item.grid)).not.toContain(variant)
+	expect(moderated).toHaveLength(2)
+	const far = `1${SHOWN_GRID.slice(1)}`
+	expect((await publish(far)).status).toBe(201)
+	expect((await listCreations()).map(item => item.grid)).toContain(far)
+	expect(moderated).toHaveLength(3)
+})
+
 test('global Snake record persists and only increases', async () => {
 	expect(await (await getSnake()).json()).toEqual({ highScore: 2 })
 	expect((await submit(4)).status).toBe(200)

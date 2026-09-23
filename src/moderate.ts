@@ -1,18 +1,17 @@
-// Re-checks every icon and updates its hidden flag. Run once after deploying moderation
-// (older icons default to visible) or after an outage. Uses DATABASE_URL like the app.
-import { listAllCreations, setHidden, sql } from './lib/board'
+// Hides any visible icon that moderation now flags. Run after deploying a stricter check or after an outage.
+// Never unhides: verdicts vary from run to run, and a hidden icon costs its author nothing.
+import { listAllCreations, nearHidden, setHidden, sql } from './lib/board'
 import { shouldHide } from './lib/moderation'
 
 if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is required')
 
-const creations = await listAllCreations()
-let changed = 0
-for (const creation of creations) {
-	const hidden = await shouldHide(creation.grid)
-	if (hidden === creation.hidden) continue
-	await setHidden(creation.id, hidden)
-	changed++
-	console.log(`${hidden ? 'Hid' : 'Showed'} #${creation.id} ${creation.grid}`)
+const visible = (await listAllCreations()).filter(creation => !creation.hidden)
+let hidden = 0
+for (const creation of visible) {
+	if (!(await nearHidden(creation.grid)) && !(await shouldHide(creation.grid))) continue
+	await setHidden(creation.id, true)
+	hidden++
+	console.log(`Hid #${creation.id} ${creation.grid}`)
 }
-console.log(`Checked ${creations.length} creations, changed ${changed}`)
+console.log(`Checked ${visible.length} visible creations, hid ${hidden}`)
 await sql.end()

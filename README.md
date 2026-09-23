@@ -4,7 +4,7 @@ NxN pixel drawer with a shared board.
 
 ## Moderation
 
-Anyone can publish. Each icon is rendered to a PNG and checked by OpenAI's `gpt-6-sol` before it reaches the public board; the prompt in `src/lib/moderation.ts` says what gets hidden. A hidden icon still shows for its author and keeps its share link, it just never appears on the board. The check fails closed, duplicate grids reuse the first verdict, and `bun run moderate` re-checks every icon. `tests/moderation-eval.ts` scores a held-out set against the real API.
+Anyone can publish. Each icon is rendered to a PNG and checked by OpenAI's `gpt-6-sol` before it reaches the public board; the prompt in `src/lib/moderation.ts` says what gets hidden. A hidden icon still shows for its author and keeps its share link, it just never appears on the board. The check fails closed, a near-copy of a hidden icon is hidden without another look, duplicate grids reuse the first verdict, and `bun run moderate` hides any visible icon the check now flags. `tests/moderation-eval.ts` scores a held-out set against the real API.
 
 Server-only environment:
 

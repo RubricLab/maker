@@ -72,6 +72,25 @@ export const addCreation = async (
 	return { created: inserted.length > 0, creation }
 }
 
+// Toggling a few pixels of a hidden icon and publishing again is the usual way around the model.
+const NEAR = 0.08
+
+/** Whether a hidden icon of the same size differs from this grid in at most 8% of its cells. */
+export const nearHidden = async (grid: string): Promise<boolean> => {
+	await initializeBoard()
+	const tolerance = Math.max(2, Math.round(grid.length * NEAR))
+	const rows = await sql<
+		{ grid: string }[]
+	>`SELECT grid FROM creations WHERE hidden = 1 AND length(grid) = ${grid.length}`
+	return rows.some(row => {
+		let distance = 0
+		for (let index = 0; index < grid.length && distance <= tolerance; index++) {
+			if (grid[index] !== row.grid[index]) distance++
+		}
+		return distance <= tolerance
+	})
+}
+
 export const listAllCreations = async (): Promise<(BoardCreation & { hidden: boolean })[]> => {
 	await initializeBoard()
 	const rows = await sql<
