@@ -46,6 +46,18 @@ export function nextGeneration(cells: number[], size: number): number[] {
 	})
 }
 
+export function expandLifeGrid(initial: number[]): number[] {
+	const size = Math.sqrt(initial.length)
+	const expandedSize = size * 5
+	const offset = size * 2
+	const expanded = Array<number>(expandedSize ** 2).fill(0)
+	for (let y = 0; y < size; y++)
+		for (let x = 0; x < size; x++) {
+			expanded[(y + offset) * expandedSize + x + offset] = initial[y * size + x] ?? 0
+		}
+	return expanded
+}
+
 const DIRECTIONS: Record<string, [number, number]> = {
 	ArrowDown: [0, 1],
 	ArrowLeft: [-1, 0],
@@ -81,8 +93,13 @@ export function GameOverlay({
 	onClose: () => void
 }) {
 	const size = Math.sqrt(initial.length)
-	const [cells, setCells] = useState(() => [...initial])
+	const lifeSize = size * 5
+	const [cells, setCells] = useState(() =>
+		game === 'life' ? expandLifeGrid(initial) : [...initial]
+	)
 	const [playing, setPlaying] = useState(true)
+	const [ready, setReady] = useState(game !== 'life')
+	const canvasRef = useRef<HTMLCanvasElement | null>(null)
 	const [speed, setSpeed] = useState(45)
 	const walls = useRef(new Set(initial.flatMap((cell, index) => (cell ? [index] : []))))
 	const snake = useRef<SnakeState | null>(null)
@@ -135,12 +152,30 @@ export function GameOverlay({
 	}, [game, onClose])
 
 	useEffect(() => {
-		if (!playing) return
+		if (game !== 'life') return
+		const timer = setTimeout(() => setReady(true), 2000)
+		return () => clearTimeout(timer)
+	}, [game])
+
+	useEffect(() => {
+		if (game !== 'life') return
+		const canvas = canvasRef.current
+		const context = canvas?.getContext('2d')
+		if (!canvas || !context) return
+		context.clearRect(0, 0, lifeSize, lifeSize)
+		context.fillStyle = getComputedStyle(canvas).color
+		for (let index = 0; index < cells.length; index++) {
+			if (cells[index]) context.fillRect(index % lifeSize, Math.floor(index / lifeSize), 1, 1)
+		}
+	}, [cells, game, lifeSize])
+
+	useEffect(() => {
+		if (!playing || !ready) return
 		// A linear slider maps to an exponential interval, from 1000ms down to 40ms.
 		const delay = 1000 * 0.04 ** (speed / 100)
 		const timer = setInterval(() => {
 			if (game === 'life') {
-				setCells(previous => nextGeneration(previous, size))
+				setCells(previous => nextGeneration(previous, lifeSize))
 				return
 			}
 			const state = snake.current
@@ -178,21 +213,22 @@ export function GameOverlay({
 			setSnakeView(updated)
 		}, delay)
 		return () => clearInterval(timer)
-	}, [game, initial.length, playing, size, speed])
+	}, [game, initial.length, lifeSize, playing, ready, size, speed])
 
 	useEffect(() => {
+		if (game !== 'life') return
 		const before = document.body.style.overflow
 		document.body.style.overflow = 'hidden'
 		return () => {
 			document.body.style.overflow = before
 		}
-	}, [])
+	}, [game])
 
 	return (
 		<div
-			className="game-overlay"
+			className={game === 'life' ? 'game-overlay' : 'snake-inline'}
 			role="dialog"
-			aria-modal="true"
+			aria-modal={game === 'life'}
 			aria-label={game === 'life' ? 'Game of Life' : 'Snake'}
 		>
 			<div className="game-controls">
@@ -224,39 +260,47 @@ export function GameOverlay({
 					<Cross1Icon />
 				</button>
 			</div>
-			<div
-				className="game-grid"
-				style={{ gridTemplateColumns: `repeat(${size}, 1fr)` }}
-				onTouchStart={event => {
-					const point = event.touches[0]
-					if (point) touch.current = [point.clientX, point.clientY]
-				}}
-				onTouchEnd={event => {
-					const point = event.changedTouches[0]
-					if (game !== 'snake' || !touch.current || !point) return
-					const dx = point.clientX - touch.current[0]
-					const dy = point.clientY - touch.current[1]
-					if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return
-					const direction: [number, number] =
-						Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)]
-					const state = snake.current
-					if (state && (direction[0] !== -state.direction[0] || direction[1] !== -state.direction[1]))
-						state.next = direction
-					touch.current = null
-				}}
-			>
-				{cells.map((cell, index) => (
-					<span
-						key={index}
-						className="game-cell"
-						data-active={
-							game === 'life' ? !!cell : walls.current.has(index) || !!snakeView?.body.includes(index)
-						}
-						data-food={game === 'snake' && snakeView?.food === index}
-						data-head={game === 'snake' && snakeView?.body[0] === index}
-					/>
-				))}
-			</div>
+			{game === 'life' ? (
+				<canvas
+					ref={canvasRef}
+					className="game-grid game-life"
+					width={lifeSize}
+					height={lifeSize}
+					aria-label="Game of Life canvas"
+				/>
+			) : (
+				<div
+					className="game-grid"
+					style={{ gridTemplateColumns: `repeat(${size}, 1fr)` }}
+					onTouchStart={event => {
+						const point = event.touches[0]
+						if (point) touch.current = [point.clientX, point.clientY]
+					}}
+					onTouchEnd={event => {
+						const point = event.changedTouches[0]
+						if (game !== 'snake' || !touch.current || !point) return
+						const dx = point.clientX - touch.current[0]
+						const dy = point.clientY - touch.current[1]
+						if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return
+						const direction: [number, number] =
+							Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)]
+						const state = snake.current
+						if (state && (direction[0] !== -state.direction[0] || direction[1] !== -state.direction[1]))
+							state.next = direction
+						touch.current = null
+					}}
+				>
+					{cells.map((_, index) => (
+						<span
+							key={index}
+							className="game-cell"
+							data-active={walls.current.has(index) || !!snakeView?.body.includes(index)}
+							data-food={snakeView?.food === index}
+							data-head={snakeView?.body[0] === index}
+						/>
+					))}
+				</div>
+			)}
 		</div>
 	)
 }

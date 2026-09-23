@@ -154,22 +154,18 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 	)
 
 	useEffect(() => {
-		const existingIcon = document.querySelector<HTMLLinkElement>('link[rel~="icon"]')
-		const icon = existingIcon ?? document.createElement('link')
-		const previousHref = icon.getAttribute('href')
-
-		if (!existingIcon) {
-			icon.rel = 'icon'
-			icon.type = 'image/svg+xml'
-			document.head.appendChild(icon)
-		}
+		// Next owns its static icon link. Keep a separate link last in the head so
+		// client navigation cannot restore the static icon over the live canvas.
+		const icon = document.createElement('link')
+		icon.rel = 'icon'
+		icon.type = 'image/svg+xml'
+		icon.dataset.makerCanvasIcon = ''
+		document.head.appendChild(icon)
 		faviconRef.current = icon
 
 		return () => {
 			faviconRef.current = null
-			if (!existingIcon) icon.remove()
-			else if (previousHref) icon.href = previousHref
-			else icon.removeAttribute('href')
+			icon.remove()
 		}
 	}, [])
 
@@ -349,15 +345,15 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 			<div className="creator">
 				<div className="canvas-heading">
 					<div className="game-actions">
-						<button
-							className="action-button secondary-action"
-							type="button"
-							onClick={() => setGame('snake')}
-							disabled={gridSize !== 30}
-							title={gridSize !== 30 ? 'Requires a 30×30 grid' : undefined}
-						>
-							<SnakeIcon /> Play snake
-						</button>
+						{gridSize === 30 && (
+							<button
+								className="action-button secondary-action"
+								type="button"
+								onClick={() => setGame('snake')}
+							>
+								<SnakeIcon /> Play snake
+							</button>
+						)}
 						<button
 							className="action-button secondary-action"
 							type="button"
@@ -395,42 +391,46 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 								</span>
 							))}
 						</div>
-						<div
-							className="pixel-grid"
-							data-transparent={transparentBackground}
-							style={{ gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}
-						>
-							{grid.map((cell, index) => {
-								const row = Math.floor(index / gridSize)
-								const column = index % gridSize
-								const isBuffer =
-									row === 0 || column === 0 || row === gridSize - 1 || column === gridSize - 1
+						{game === 'snake' ? (
+							<GameOverlay key="snake" game="snake" initial={grid} onClose={() => setGame(null)} />
+						) : (
+							<div
+								className="pixel-grid"
+								data-transparent={transparentBackground}
+								style={{ gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}
+							>
+								{grid.map((cell, index) => {
+									const row = Math.floor(index / gridSize)
+									const column = index % gridSize
+									const isBuffer =
+										row === 0 || column === 0 || row === gridSize - 1 || column === gridSize - 1
 
-								return (
-									<button
-										key={index}
-										className="pixel-cell"
-										data-active={cell === 1}
-										data-buffer={isBuffer}
-										type="button"
-										aria-label={`${cell ? 'Erase' : 'Fill'} row ${Math.floor(index / gridSize) + 1}, column ${(index % gridSize) + 1}`}
-										aria-pressed={cell === 1}
-										onClick={event => {
-											if (event.detail !== 0) return
-											lastPaintedCellRef.current = null
-											paintCell(index, cell ? 0 : 1)
-											lastPaintedCellRef.current = null
-										}}
-										onPointerDown={event => {
-											if (event.button !== 0) return
-											event.preventDefault()
-											handlePointerDown(index)
-										}}
-										onPointerEnter={() => handlePointerMove(index)}
-									/>
-								)
-							})}
-						</div>
+									return (
+										<button
+											key={index}
+											className="pixel-cell"
+											data-active={cell === 1}
+											data-buffer={isBuffer}
+											type="button"
+											aria-label={`${cell ? 'Erase' : 'Fill'} row ${Math.floor(index / gridSize) + 1}, column ${(index % gridSize) + 1}`}
+											aria-pressed={cell === 1}
+											onClick={event => {
+												if (event.detail !== 0) return
+												lastPaintedCellRef.current = null
+												paintCell(index, cell ? 0 : 1)
+												lastPaintedCellRef.current = null
+											}}
+											onPointerDown={event => {
+												if (event.button !== 0) return
+												event.preventDefault()
+												handlePointerDown(index)
+											}}
+											onPointerEnter={() => handlePointerMove(index)}
+										/>
+									)
+								})}
+							</div>
+						)}
 					</div>
 
 					<div className="editor-meta">
@@ -494,15 +494,15 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 
 						<div className="export-actions">
 							<div className="mobile-game-actions">
-								<button
-									className="action-button secondary-action"
-									type="button"
-									onClick={() => setGame('snake')}
-									disabled={gridSize !== 30}
-									title={gridSize !== 30 ? 'Requires a 30×30 grid' : undefined}
-								>
-									<SnakeIcon /> Play snake
-								</button>
+								{gridSize === 30 && (
+									<button
+										className="action-button secondary-action"
+										type="button"
+										onClick={() => setGame('snake')}
+									>
+										<SnakeIcon /> Play snake
+									</button>
+								)}
 								<button
 									className="action-button secondary-action"
 									type="button"
@@ -600,7 +600,9 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 					})}
 				</div>
 			</section>
-			{game && <GameOverlay key={game} game={game} initial={grid} onClose={() => setGame(null)} />}
+			{game === 'life' && (
+				<GameOverlay key="life" game="life" initial={grid} onClose={() => setGame(null)} />
+			)}
 		</main>
 	)
 }
