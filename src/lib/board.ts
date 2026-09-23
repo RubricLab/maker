@@ -37,6 +37,11 @@ for (let attempt = 0; ; attempt++) {
 	}
 }
 database.exec(`
+	CREATE TABLE IF NOT EXISTS snake_score (
+		id INTEGER PRIMARY KEY CHECK (id = 1),
+		score INTEGER NOT NULL DEFAULT 0 CHECK (score BETWEEN 0 AND 900)
+	) STRICT;
+	INSERT OR IGNORE INTO snake_score (id, score) VALUES (1, 0);
 	CREATE TABLE IF NOT EXISTS creations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		grid TEXT NOT NULL UNIQUE,
@@ -97,3 +102,15 @@ export const listAllCreations = (): (BoardCreation & { hidden: boolean })[] => {
 export const setHidden = (id: number, hidden: boolean): void => {
 	database.query('UPDATE creations SET hidden = ? WHERE id = ?').run(hidden ? 1 : 0, id)
 }
+
+export const snakeHighScore = (): number =>
+	database.query<{ score: number }, []>('SELECT score FROM snake_score WHERE id = 1').get()?.score ??
+	0
+
+export const recordSnakeScore = (score: number): { highScore: number; newRecord: boolean } =>
+	database.transaction(() => {
+		const result = database
+			.query('UPDATE snake_score SET score = ? WHERE id = 1 AND score < ?')
+			.run(score, score)
+		return { highScore: snakeHighScore(), newRecord: result.changes === 1 }
+	})()

@@ -20,6 +20,7 @@ const previousPath = process.env.DATABASE_PATH
 process.env.DATABASE_PATH = databasePath
 const { addCreation, listCreations, findCreation } = await import('../src/lib/board')
 const { POST } = await import('../src/app/api/board/route')
+const { GET: getSnake, POST: postSnake } = await import('../src/app/api/snake/route')
 if (previousPath === undefined) delete process.env.DATABASE_PATH
 else process.env.DATABASE_PATH = previousPath
 
@@ -75,6 +76,25 @@ test('API answers duplicates without moderating again', async () => {
 	expect(duplicate.status).toBe(200)
 	expect(((await duplicate.json()) as { created: boolean }).created).toBe(false)
 	expect(moderated).toHaveLength(8)
+})
+
+test('global Snake record persists and only increases', async () => {
+	expect(await getSnake().json()).toEqual({ highScore: 0 })
+	const submit = (score: unknown, origin = 'http://localhost') =>
+		postSnake(
+			new Request('http://localhost/api/snake', {
+				body: JSON.stringify({ score }),
+				headers: { Origin: origin },
+				method: 'POST'
+			})
+		)
+	expect((await submit(4)).status).toBe(200)
+	expect(await getSnake().json()).toEqual({ highScore: 4 })
+	expect(await (await submit(3)).json()).toEqual({ highScore: 4, newRecord: false })
+	expect(await (await submit(7)).json()).toEqual({ highScore: 7, newRecord: true })
+	expect((await submit(901)).status).toBe(400)
+	expect((await submit(8, 'https://other.example')).status).toBe(403)
+	expect(await getSnake().json()).toEqual({ highScore: 7 })
 })
 
 test('API rejects grids that are blank or an unsupported size', async () => {

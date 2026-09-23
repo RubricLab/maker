@@ -20,6 +20,20 @@ export function SnakeIcon() {
 	)
 }
 
+function TrophyIcon() {
+	return (
+		<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+			<path
+				d="M4 2h8v4a4 4 0 0 1-8 0V2ZM4 3H2v2a2 2 0 0 0 2 2m8-4h2v2a2 2 0 0 1-2 2M8 10v3m-3 1h6"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	)
+}
+
 export function LifeIcon() {
 	return (
 		<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -104,6 +118,8 @@ export function GameOverlay({
 	const walls = useRef(new Set(initial.flatMap((cell, index) => (cell ? [index] : []))))
 	const snake = useRef<SnakeState | null>(null)
 	const [snakeView, setSnakeView] = useState<SnakeState | null>(null)
+	const [highScore, setHighScore] = useState<number | null>(null)
+	const [newRecord, setNewRecord] = useState(false)
 	const touch = useRef<[number, number] | null>(null)
 
 	useEffect(() => {
@@ -124,6 +140,34 @@ export function GameOverlay({
 		snake.current = state
 		setSnakeView(state)
 	}, [game, initial.length, size])
+
+	useEffect(() => {
+		if (game !== 'snake') return
+		void fetch('/api/snake')
+			.then(response => response.json())
+			.then((result: { highScore: number }) =>
+				setHighScore(current => Math.max(current ?? 0, result.highScore))
+			)
+			.catch(() => {})
+	}, [game])
+
+	useEffect(() => {
+		if (game !== 'snake' || !snakeView?.ended) return
+		void fetch('/api/snake', {
+			body: JSON.stringify({ score: snakeView.score }),
+			headers: { 'Content-Type': 'application/json' },
+			method: 'POST'
+		})
+			.then(response => {
+				if (!response.ok) throw new Error('Could not save score')
+				return response.json() as Promise<{ highScore: number; newRecord: boolean }>
+			})
+			.then(result => {
+				setHighScore(result.highScore)
+				setNewRecord(result.newRecord)
+			})
+			.catch(() => {})
+	}, [game, snakeView?.ended, snakeView?.score])
 
 	useEffect(() => {
 		const key = (event: KeyboardEvent) => {
@@ -172,7 +216,7 @@ export function GameOverlay({
 	useEffect(() => {
 		if (!playing || !ready) return
 		// A linear slider maps to an exponential interval, from 1000ms down to 40ms.
-		const delay = 1000 * 0.04 ** (speed / 100)
+		const delay = game === 'snake' ? 185 : 1000 * 0.04 ** (speed / 100)
 		const timer = setInterval(() => {
 			if (game === 'life') {
 				setCells(previous => nextGeneration(previous, lifeSize))
@@ -235,20 +279,27 @@ export function GameOverlay({
 				{game === 'snake' && (
 					<span className="game-score">
 						Score {snakeView?.score ?? 0}
-						{snakeView?.ended ? ' · Game over' : ''}
+						{snakeView?.ended && (
+							<>
+								{' '}
+								· Game over · Best {highScore ?? '…'} {newRecord && <TrophyIcon />}
+							</>
+						)}
 					</span>
 				)}
-				<label className="game-speed">
-					Speed{' '}
-					<input
-						type="range"
-						min="0"
-						max="100"
-						value={speed}
-						onChange={event => setSpeed(Number(event.target.value))}
-						aria-label="Game speed"
-					/>
-				</label>
+				{game === 'life' && (
+					<label className="game-speed">
+						Speed{' '}
+						<input
+							type="range"
+							min="0"
+							max="100"
+							value={speed}
+							onChange={event => setSpeed(Number(event.target.value))}
+							aria-label="Game speed"
+						/>
+					</label>
+				)}
 				<button
 					type="button"
 					onClick={() => setPlaying(value => !value)}
