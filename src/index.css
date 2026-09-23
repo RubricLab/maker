@@ -688,6 +688,16 @@ button {
 		align-self: start;
 	}
 
+	.canvas {
+		width: calc(100% + 20px);
+		margin-left: -20px;
+	}
+
+	.canvas-heading,
+	.editor-meta {
+		padding-left: 0;
+	}
+
 	.board {
 		height: 100svh;
 		margin-top: calc(-1 * var(--top-space));
