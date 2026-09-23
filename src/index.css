@@ -690,12 +690,17 @@ button {
 
 	.canvas {
 		width: calc(100% + 20px);
+		margin-top: -22px;
 		margin-left: -20px;
 	}
 
 	.canvas-heading,
 	.editor-meta {
 		padding-left: 0;
+	}
+
+	.canvas-heading {
+		transform: translateY(-22px);
 	}
 
 	.board {
