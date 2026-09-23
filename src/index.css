@@ -693,6 +693,13 @@ button {
 	}
 }
 
+@media (min-width: 961px) and (max-width: 1600px) {
+	.maker {
+		width: 100%;
+		max-width: none;
+	}
+}
+
 @media (min-width: 961px) and (max-width: 1160px) {
 	.action-button kbd {
 		display: none;
