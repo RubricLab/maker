@@ -13,9 +13,10 @@ export function CopyIcon() {
 			<rect x="1" y="2" width="1" height="1" />
 			<rect x="4" y="2" width="1" height="1" />
 			<rect x="1" y="3" width="1" height="1" />
-			<rect x="3" y="3" width="3" height="1" />
-			<rect x="1" y="4" width="5" height="1" />
-			<rect x="3" y="5" width="3" height="1" />
+			<rect x="3" y="3" width="4" height="1" />
+			<rect x="1" y="4" width="6" height="1" />
+			<rect x="3" y="5" width="4" height="1" />
+			<rect x="3" y="6" width="4" height="1" />
 		</svg>
 	)
 }

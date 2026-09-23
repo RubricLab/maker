@@ -2,6 +2,7 @@
 @source "../node_modules/@rubriclab/ui";
 
 :root {
+	--logo-size: 30px;
 	--background: #ffffff;
 	--foreground: #171717;
 	--secondary: #666666;
@@ -72,13 +73,13 @@ button {
 	top: 0;
 	left: 0;
 	z-index: 10;
-	padding: 18px;
+	padding: var(--logo-size);
 	pointer-events: none;
 }
 
 .app-logo {
 	display: grid;
-	width: 30px;
+	width: var(--logo-size);
 	aspect-ratio: 1;
 	grid-template-columns: repeat(5, 1fr);
 	color: var(--foreground);
@@ -702,7 +703,12 @@ button {
 	}
 
 	.creator {
+		grid-template-columns: calc(164px + var(--logo-size)) minmax(0, min(800px, calc(100svh - 155px)));
 		justify-content: start;
+	}
+
+	.sidebar {
+		padding-left: var(--logo-size);
 	}
 }
 
