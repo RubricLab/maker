@@ -101,6 +101,32 @@ try {
 	assert.equal(((await duplicate.json()) as { created: boolean }).created, false)
 	assert.equal(moderations, 2)
 
+	await page.getByRole('button', { name: 'Clear' }).click()
+	assert.equal(await page.locator('.pixel-cell[data-active="true"]').count(), 0)
+	await page.keyboard.press('Control+z')
+	await page.locator('.board-icon[data-selected="true"]').waitFor()
+	await page.locator('.size-increase').click()
+	assert.equal(await page.locator('.pixel-cell').count(), 49)
+	assert.equal(await page.getByRole('button', { name: 'Erase row 2, column 3' }).count(), 1)
+	await page.keyboard.press('Control+z')
+	assert.equal(await page.locator('.pixel-cell').count(), 25)
+	await page.getByRole('button', { name: 'Fill row 1, column 1' }).click()
+	await page.keyboard.press('Control+z')
+	await page.locator('.board-icon[data-selected="true"]').waitFor()
+	await page.getByRole('button', { name: 'Fill row 1, column 1' }).click()
+	await page.locator('.mobile-board-action').click()
+	await page.locator('.board-icon').nth(1).waitFor()
+	await page.keyboard.press('Control+z')
+	await page.locator('.board-icon').nth(1).waitFor({ state: 'detached' })
+	assert.deepEqual(
+		(
+			(await (await fetch(`${origin}/api/board`)).json()) as { creations: { grid: string }[] }
+		).creations.map(item => item.grid),
+		[SHOWN_GRID]
+	)
+	await page.keyboard.press('Control+z')
+	await page.locator('.board-icon[data-selected="true"]').waitFor()
+
 	assert.equal(await page.getByRole('button', { name: 'Play snake' }).count(), 0)
 	const icon = page.locator('link[data-maker-canvas-icon]')
 	const firstIcon = await icon.getAttribute('href')

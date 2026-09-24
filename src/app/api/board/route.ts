@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server'
-import { addCreation, findCreation, listCreations, nearHidden } from '~/lib/board'
+import {
+	addCreation,
+	findCreation,
+	listCreations,
+	nearHidden,
+	unpublishCreation
+} from '~/lib/board'
 import { shouldHide } from '~/lib/moderation'
 
 export const dynamic = 'force-dynamic'
@@ -56,11 +62,37 @@ export async function POST(request: Request) {
 
 	// Moderation is only paid for once per distinct grid; the publisher never learns the verdict.
 	const existing = await findCreation(grid)
-	const result = existing
-		? { created: false, creation: existing }
-		: await addCreation(grid, (await nearHidden(grid)) || (await shouldHide(grid)))
+	const result = await addCreation(
+		grid,
+		existing ? false : (await nearHidden(grid)) || (await shouldHide(grid))
+	)
 	return NextResponse.json(result, {
 		headers: { 'Cache-Control': 'no-store' },
 		status: result.created ? 201 : 200
 	})
+}
+
+export async function DELETE(request: Request) {
+	let body: unknown
+	try {
+		body = await request.json()
+	} catch {
+		return NextResponse.json({ error: 'Invalid request.' }, { status: 400 })
+	}
+
+	const { id, undoToken } = (body as { id?: unknown; undoToken?: unknown } | null) ?? {}
+	if (
+		!Number.isSafeInteger(id) ||
+		Number(id) <= 0 ||
+		typeof undoToken !== 'string' ||
+		!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(undoToken)
+	) {
+		return NextResponse.json({ error: 'Invalid request.' }, { status: 400 })
+	}
+
+	const unpublished = await unpublishCreation(Number(id), undoToken)
+	return NextResponse.json(
+		unpublished ? { unpublished: true } : { error: 'Cannot undo this board post.' },
+		{ headers: { 'Cache-Control': 'no-store' }, status: unpublished ? 200 : 403 }
+	)
 }

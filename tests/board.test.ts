@@ -32,7 +32,7 @@ legacy.exec(`
 `)
 legacy.close()
 const { addCreation, listCreations, findCreation, sql } = await import('../src/lib/board')
-const { POST } = await import('../src/app/api/board/route')
+const { POST, DELETE: unpublish } = await import('../src/app/api/board/route')
 const { GET: getSnake, POST: postSnake } = await import('../src/app/api/snake/route')
 
 // Stand in for the moderation API: one grid is offensive, and every image checked is recorded.
@@ -54,6 +54,13 @@ afterAll(async () => {
 
 const publish = (grid: string) =>
 	POST(new Request('http://localhost/api/board', { body: JSON.stringify({ grid }), method: 'POST' }))
+const undoPublish = (id: unknown, undoToken: unknown) =>
+	unpublish(
+		new Request('http://localhost/api/board', {
+			body: JSON.stringify({ id, undoToken }),
+			method: 'DELETE'
+		})
+	)
 const submit = (score: unknown, origin = 'http://localhost') =>
 	postSnake(
 		new Request('http://localhost/api/snake', {
@@ -119,6 +126,39 @@ test('API hides near-copies of a hidden icon without asking the model', async ()
 	expect((await publish(far)).status).toBe(201)
 	expect((await listCreations()).map(item => item.grid)).toContain(far)
 	expect(moderated).toHaveLength(3)
+})
+
+test('only the publisher can undo a post; republishing keeps its moderation verdict', async () => {
+	const grid = '1111111111111111111111111'
+	const published = (await (await publish(grid)).json()) as {
+		creation: { id: number }
+		undoToken: string
+	}
+	expect(published.undoToken).toBeString()
+	expect((await undoPublish(published.creation.id, crypto.randomUUID())).status).toBe(403)
+	expect((await listCreations()).some(item => item.grid === grid)).toBe(true)
+	expect((await undoPublish(published.creation.id, published.undoToken)).status).toBe(200)
+	expect((await undoPublish(published.creation.id, published.undoToken)).status).toBe(403)
+	expect((await listCreations()).some(item => item.grid === grid)).toBe(false)
+	const count = moderated.length
+	const republished = (await (await publish(grid)).json()) as {
+		created: boolean
+		undoToken: string
+	}
+	expect(republished.created).toBe(true)
+	expect(republished.undoToken).not.toBe(published.undoToken)
+	expect(moderated).toHaveLength(count)
+	expect((await listCreations()).some(item => item.grid === grid)).toBe(true)
+
+	const hiddenGrid = `1${HIDDEN_GRID.slice(1, -1)}1`
+	const hidden = (await (await publish(hiddenGrid)).json()) as {
+		creation: { id: number }
+		undoToken: string
+	}
+	expect((await undoPublish(hidden.creation.id, hidden.undoToken)).status).toBe(200)
+	expect(((await (await publish(hiddenGrid)).json()) as { created: boolean }).created).toBe(false)
+	expect((await listCreations()).some(item => item.grid === hiddenGrid)).toBe(false)
+	expect(moderated).toHaveLength(count)
 })
 
 test('global Snake record persists and only increases', async () => {

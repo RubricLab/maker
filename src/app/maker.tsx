@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { useDarkMode } from '~/hooks/useDarkMode'
 import type { BoardCreation } from '~/lib/board'
 import { GRID_SIZES, RUBRIC_BINARY } from '~/lib/constants'
+import { resizeGrid } from '~/lib/resize-grid'
 import { type Game, GameOverlay, SnakeIcon } from './games'
 import { CopyIcon, DownloadIcon, LifeIcon } from './icons'
 
@@ -25,6 +26,17 @@ const starfield = `url("data:image/svg+xml,${encodeURIComponent(
 		}
 	).join('')}</svg>`
 )}")`
+
+type UndoAction =
+	| { kind: 'grid'; grid: number[] }
+	| {
+			kind: 'board'
+			grid: string
+			id?: number
+			undoToken?: string
+			previousAddedGrid: string | null
+			ready: Promise<void>
+	  }
 
 type GridImageCreatorProps = {
 	initialBoard: BoardCreation[]
@@ -83,32 +95,44 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 	const drawValueRef = useRef(1)
 	const lastPaintedCellRef = useRef<number | null>(null)
 	const faviconRef = useRef<HTMLLinkElement | null>(null)
+	const gridRef = useRef(grid)
+	useEffect(() => {
+		gridRef.current = grid
+	}, [grid])
+	const historyRef = useRef<UndoAction[]>([])
+	const undoingRef = useRef(false)
 
-	const handleSizeChange = (newSize: number | undefined): void => {
-		if (!newSize) return
-		setGrid(Array(newSize ** 2).fill(0))
-	}
-
-	const paintCell = useCallback(
-		(index: number, value: number): void => {
-			if (lastPaintedCellRef.current === index) return
-
-			setGrid(previousGrid => {
-				if (previousGrid[index] === value) return previousGrid
-				const nextGrid = [...previousGrid]
-				nextGrid[index] = value
-				return nextGrid
-			})
-			lastPaintedCellRef.current = index
+	const changeGrid = useCallback(
+		(nextGrid: number[], record = true): void => {
+			if (record) historyRef.current.push({ grid: gridRef.current, kind: 'grid' })
+			gridRef.current = nextGrid
+			void setGrid(nextGrid)
 		},
 		[setGrid]
 	)
 
+	const handleSizeChange = (newSize: number | undefined): void => {
+		if (!newSize || newSize === Math.sqrt(gridRef.current.length)) return
+		changeGrid(resizeGrid(gridRef.current, newSize))
+		setClearing(null)
+	}
+
+	const paintCell = useCallback(
+		(index: number, value: number, record = false): void => {
+			if (lastPaintedCellRef.current === index || gridRef.current[index] === value) return
+			const nextGrid = [...gridRef.current]
+			nextGrid[index] = value
+			changeGrid(nextGrid, record)
+			lastPaintedCellRef.current = index
+		},
+		[changeGrid]
+	)
+
 	const handlePointerDown = (index: number): void => {
-		const nextValue = grid[index] ? 0 : 1
+		const nextValue = gridRef.current[index] ? 0 : 1
 		isDrawingRef.current = true
 		drawValueRef.current = nextValue
-		paintCell(index, nextValue)
+		paintCell(index, nextValue, true)
 	}
 
 	const handlePointerMove = (index: number): void => {
@@ -286,6 +310,17 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 
 	const addToBoard = async (): Promise<void> => {
 		if (isBlank || addingToBoard) return
+		let finishPublish!: () => void
+		const ready = new Promise<void>(resolve => {
+			finishPublish = resolve
+		})
+		const action: Extract<UndoAction, { kind: 'board' }> = {
+			grid: serializedGrid,
+			kind: 'board',
+			previousAddedGrid: addedGrid,
+			ready
+		}
+		historyRef.current.push(action)
 		setAddingToBoard(true)
 		try {
 			const response = await fetch('/api/board', {
@@ -297,10 +332,15 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 				created?: boolean
 				creation?: BoardCreation
 				error?: string
+				undoToken?: string
 			}
 			if (!response.ok || !payload.creation) throw new Error(payload.error || 'Failed to add creation')
 
 			const creation = payload.creation
+			if (payload.created && payload.undoToken) {
+				action.id = creation.id
+				action.undoToken = payload.undoToken
+			}
 			setBoard(previous => [creation, ...previous.filter(item => item.id !== creation.id)])
 			setAddedGrid(serializedGrid)
 			setPoppingCreation(previous => ({ id: creation.id, nonce: previous.nonce + 1 }))
@@ -309,16 +349,56 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 			console.error({ error })
 			toast.error(error instanceof Error ? error.message : 'Failed to add creation')
 		} finally {
+			if (!action.undoToken) historyRef.current.splice(historyRef.current.indexOf(action), 1)
+			finishPublish()
 			setAddingToBoard(false)
 		}
 	}
 
 	const clearGrid = useCallback((): void => {
-		const cells = grid.flatMap((cell, index) => (cell ? [index] : []))
+		const current = gridRef.current
+		const cells = current.flatMap((cell, index) => (cell ? [index] : []))
 		if (!cells.length) return
-		setClearing(previous => ({ cells, nonce: (previous?.nonce ?? 0) + 1, size: gridSize }))
-		setGrid(Array(grid.length).fill(0))
-	}, [grid, gridSize, setGrid])
+		setClearing(previous => ({
+			cells,
+			nonce: (previous?.nonce ?? 0) + 1,
+			size: Math.sqrt(current.length)
+		}))
+		changeGrid(Array(current.length).fill(0))
+	}, [changeGrid])
+
+	const undo = useCallback(async (): Promise<void> => {
+		if (undoingRef.current) return
+		const action = historyRef.current.at(-1)
+		if (!action) return
+		if (action.kind === 'grid') {
+			historyRef.current.pop()
+			stopDrawing()
+			setClearing(null)
+			changeGrid(action.grid, false)
+			return
+		}
+
+		undoingRef.current = true
+		try {
+			await action.ready
+			if (!action.id || !action.undoToken) return
+			const response = await fetch('/api/board', {
+				body: JSON.stringify({ id: action.id, undoToken: action.undoToken }),
+				headers: { 'Content-Type': 'application/json' },
+				method: 'DELETE'
+			})
+			if (!response.ok) throw new Error('Could not unpublish from the board')
+			historyRef.current.splice(historyRef.current.indexOf(action), 1)
+			setBoard(previous => previous.filter(item => item.id !== action.id))
+			setAddedGrid(current => (current === action.grid ? action.previousAddedGrid : current))
+		} catch (error) {
+			console.error({ error })
+			toast.error('Could not unpublish from the board')
+		} finally {
+			undoingRef.current = false
+		}
+	}, [changeGrid, stopDrawing])
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent): void => {
@@ -327,6 +407,11 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 			if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
 
 			const key = event.key.toLowerCase()
+			if (key === 'z') {
+				event.preventDefault()
+				void undo()
+				return
+			}
 			if (key === 'backspace') {
 				event.preventDefault()
 				clearGrid()
@@ -345,7 +430,7 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 
 		window.addEventListener('keydown', handleKeyDown)
 		return () => window.removeEventListener('keydown', handleKeyDown)
-	}, [clearGrid, copyAsPNG, downloadAsPNG, game])
+	}, [clearGrid, copyAsPNG, downloadAsPNG, game, undo])
 
 	return (
 		<main className="maker">
@@ -458,7 +543,7 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 											onClick={event => {
 												if (event.detail !== 0) return
 												lastPaintedCellRef.current = null
-												paintCell(index, cell ? 0 : 1)
+												paintCell(index, cell ? 0 : 1, true)
 												lastPaintedCellRef.current = null
 											}}
 											onPointerDown={event => {
@@ -614,11 +699,15 @@ export const GridImageCreator: FC<GridImageCreatorProps> = ({
 								data-popping={isPopping}
 								data-selected={creation.grid === serializedGrid}
 								href={`/?grid=${creation.grid}${transparentBackground ? '' : '&transparent=false'}`}
-								onFocus={() => setGrid(creation.grid.split('').map(Number))}
+								onFocus={() => {
+									if (gridRef.current.join('') !== creation.grid)
+										changeGrid(creation.grid.split('').map(Number))
+								}}
 								onClick={event => {
 									if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
 									event.preventDefault()
-									setGrid(creation.grid.split('').map(Number))
+									if (gridRef.current.join('') !== creation.grid)
+										changeGrid(creation.grid.split('').map(Number))
 								}}
 								title={`${size}×${size}`}
 							>
