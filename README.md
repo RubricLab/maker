@@ -24,7 +24,7 @@ Postgres runs locally, with database and role `maker` and new credentials in `/e
 
 Deploy `RubricLab/maker` main manually over SSH. Install the frozen Bun lockfile, build with `/usr/local/bin/bun node_modules/next/dist/bin/next build`, then restart `maker`. Set `PATH=/srv/demos/maker/bin:/usr/local/bin:/usr/bin:/bin` for builds: the local `node` shim points to Bun for Next's child processes. Back up Postgres before deploying; never reimport the retired SQLite database over current data.
 
-The migration dump and data hashes are root-only in `/srv/demos/maker/backups`. All 53 creations, flags, undo tokens, the ID sequence and Snake score were verified at cutover. Railway's app and Postgres are stopped, with project deletion scheduled for 23 Oct 2026. Do not redeploy there.
+The migration dump and data hashes are root-only in `/srv/demos/maker/backups`. All 53 creations, flags, undo tokens, the ID sequence and Snake score were verified at cutover. The Railway project was force-deleted on 21 Oct 2026, skipping its recovery window. Do not redeploy there.
 
 For local development, set `DATABASE_URL` and run `bun run dev`, or `bun --bun run build` then `PORT=8840 bun --bun run start`.
 
