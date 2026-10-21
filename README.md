@@ -10,15 +10,21 @@ Server-only environment:
 
 ```
 OPENAI_API_KEY=...
-DATABASE_URL=${{Postgres.DATABASE_URL}}
-DATABASE_PATH=/data/board-final.sqlite  # legacy import only
+DATABASE_URL=postgres://maker:...@127.0.0.1:5432/maker
+PUBLIC_ORIGIN=https://maker.rubric.sh
 ```
 
 Use a local Postgres database for development. `DATABASE_URL` is required at runtime. Keep database credentials private.
 
 ## Production
 
-The `maker` project in Railway's Rubric Labs workspace deploys `RubricLab/maker` main as one service from the Dockerfile, with Railway Postgres for board icons and the global Snake high score. Next.js listens on Railway's `PORT`. The old SQLite volume remains mounted for rollback. `src/migrate.ts` imports it idempotently at startup, preserving IDs, timestamps, hidden flags, and the high score; rerun it after the first cutover to catch writes made by the old instance while Railway switched traffic. `maker.rubric.sh` points directly to Railway. The old devbox services, app, and Caddy route have been removed; historical database snapshots remain in `/root/maker-migration` and `/var/lib/maker`. The auth database, the Resend variables, and `TYPESAFE_API_KEY` are no longer used. To rescore icons after an outage, run `railway ssh -- bun run moderate`. Keep `/data/board-pre-postgres.sqlite` as a rollback snapshot.
+`maker.rubric.sh` runs on OVH Beauharnois (`ssh den`, `51.222.6.120`) since 21 Oct 2026. The `maker` systemd service runs as user `maker` from `/srv/demos/maker/app`, using Bun and Next.js on `127.0.0.1:8821`. Caddy serves HTTPS through `/etc/caddy/demos/maker.caddy`.
+
+Postgres runs locally, with database and role `maker` and new credentials in `/etc/maker.env` (`root:maker`, mode `640`). The app needs only its database URL, public origin and OpenAI moderation key. The auth database, Resend and `TYPESAFE_API_KEY` are no longer used.
+
+Deploy `RubricLab/maker` main manually over SSH. Install the frozen Bun lockfile, build with `/usr/local/bin/bun node_modules/next/dist/bin/next build`, then restart `maker`. Set `PATH=/srv/demos/maker/bin:/usr/local/bin:/usr/bin:/bin` for builds: the local `node` shim points to Bun for Next's child processes. Back up Postgres before deploying; never reimport the retired SQLite database over current data.
+
+The migration dump and data hashes are root-only in `/srv/demos/maker/backups`. All 53 creations, flags, undo tokens, the ID sequence and Snake score were verified at cutover. Railway's app and Postgres are stopped, with project deletion scheduled for 23 Oct 2026. Do not redeploy there.
 
 For local development, set `DATABASE_URL` and run `bun run dev`, or `bun --bun run build` then `PORT=8840 bun --bun run start`.
 
